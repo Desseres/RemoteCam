@@ -1,3 +1,14 @@
+* text=auto
+gradlew text eol=lf
+*.bat text eol=crlf
+*.kt text eol=lf
+*.gradle text eol=lf
+*.xml text eol=lf
+*.md text eol=lf
+*.properties text eol=lf
+*.ps1 text eol=lf
+*.py text eol=lf
+
 # Preserve upstream notices and unified-diff context without treating them as source whitespace errors.
 /app/src/main/resources/licenses/WEBRTC.md -whitespace
 /patches/*.patch -whitespace

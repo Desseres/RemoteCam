@@ -25,7 +25,7 @@ lub reinstalacji systemu. Aby samodzielnie odczytać hasło w swoim lokalnym ter
 i zapisać je w bezpiecznym magazynie, użyj:
 
 ```powershell
-$secret = Get-Content "$env:LOCALAPPDATA\RemoteCam\signing\remotecam-release.password.dpapi" -Raw | ConvertTo-SecureString
+$secret = (Get-Content "$env:LOCALAPPDATA\RemoteCam\signing\remotecam-release.password.dpapi" -Raw).Trim() | ConvertTo-SecureString
 [Net.NetworkCredential]::new('', $secret).Password
 $secret.Dispose()
 ```
@@ -54,7 +54,7 @@ albo podpisując APK bezpośrednio narzędziem Android `apksigner`.
 
 Skrypt wymaga czystego drzewa Git, taga wskazującego HEAD, JDK i Android SDK
 Build-Tools 37.0.0. Buduje uniwersalne APK, wykonuje wyrównanie dla 16 KB,
-podpisuje schematami v2/v3 i sprawdza podpis, wyrównanie, numer wersji oraz brak
+podpisuje APK (schemat v3 dla Androida 9+) i sprawdza podpis, wyrównanie, numer wersji oraz brak
 flagi `debuggable`. Nie zapisuje haseł w argumentach procesu ani w konfiguracji
 Gradle. Skrypt nie publikuje wydania w GitHubie.
 
@@ -65,8 +65,9 @@ W `dist/vWERSJA/` powstają:
 - `release-notes.md` — gotowy opis wydania;
 - `build-info.json` — commit, tag, wersja aplikacji i publiczny odcisk certyfikatu.
 
-Katalog `dist/` jest ignorowany przez Git. Skrypt nie nadpisuje istniejącego
-katalogu wydania. Pliki można załączyć do GitHub Release utworzonego z tego samego
+Katalog `dist/` jest ignorowany przez Git. Skrypt nie nadpisuje plików istniejącego
+wydania; pusty katalog po przerwanym pakowaniu może wykorzystać ponownie.
+Pliki można załączyć do GitHub Release utworzonego z tego samego
 taga. Nie dodawaj klucza podpisywania jako assetu. Samo utworzenie commita i taga
 nie publikuje pliku APK.
 

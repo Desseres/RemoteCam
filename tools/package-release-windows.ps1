@@ -28,7 +28,9 @@ $unsignedApk = Join-Path $apkDirectory $metadata.elements[0].outputFile
 $outputDirectory = Join-Path $projectPath "dist\$tag"
 $apkName = "RemoteCam-$version.apk"
 $apkPath = Join-Path $outputDirectory $apkName
-if (Test-Path -LiteralPath $outputDirectory) { throw "Output directory already exists: $outputDirectory. Preserve published artifacts; choose a new version for changes." }
+if ((Test-Path -LiteralPath $outputDirectory) -and (Get-ChildItem -LiteralPath $outputDirectory -Force).Count -gt 0) {
+    throw "Output directory contains files: $outputDirectory. Preserve published artifacts; choose a new version for changes."
+}
 $sdkPath = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { Join-Path $env:LOCALAPPDATA 'Android\Sdk' }
 $buildTools = Join-Path $sdkPath 'build-tools\37.0.0'
 $javaPath = Join-Path $env:ProgramFiles 'Android\Android Studio\jbr'
@@ -40,11 +42,11 @@ $aapt = Join-Path $buildTools 'aapt.exe'
 foreach ($toolPath in @($javaExe, $apksigner, $zipalign, $aapt)) {
     if (!(Test-Path -LiteralPath $toolPath)) { throw "Required tool missing: $toolPath" }
 }
-New-Item -ItemType Directory -Path $outputDirectory | Out-Null
+New-Item -ItemType Directory -Force -Path $outputDirectory | Out-Null
 $alignedApk = Join-Path $apkDirectory 'app-release-aligned.apk'
 & $zipalign -P 16 -f 4 $unsignedApk $alignedApk
 if ($LASTEXITCODE -ne 0) { throw 'APK alignment failed.' }
-$securePassword = Get-Content -LiteralPath $passwordPath -Raw | ConvertTo-SecureString
+$securePassword = (Get-Content -LiteralPath $passwordPath -Raw).Trim() | ConvertTo-SecureString
 $previousPassword = $env:REMOTECAM_SIGNING_PASSWORD
 try {
     $env:REMOTECAM_SIGNING_PASSWORD = [Net.NetworkCredential]::new('', $securePassword).Password
@@ -58,13 +60,18 @@ $verification = & $javaExe -jar $apksigner verify --verbose --print-certs $apkPa
 if ($LASTEXITCODE -ne 0) { throw 'APK signature verification failed.' }
 & $zipalign -c -P 16 4 $apkPath
 if ($LASTEXITCODE -ne 0) { throw 'Signed APK alignment check failed.' }
-$badging = & $aapt dump badging $apkPath
+# aapt's Windows ZIP reader cannot open non-ASCII paths; the build helper already
+# validated this ASCII junction to the same checkout.
+$apkToolPath = Join-Path $BuildRoot "project\dist\$tag\$apkName"
+$badging = & $aapt dump badging $apkToolPath
 if ($LASTEXITCODE -ne 0) { throw 'APK manifest inspection failed.' }
 if ($badging -match '^application-debuggable') { throw 'Refusing to distribute a debuggable APK.' }
 if (!($badging -match "versionCode='$versionCode' versionName='$version'")) { throw 'APK version check failed.' }
 if (!($badging -match "sdkVersion:'28'") -or !($badging -match "targetSdkVersion:'37'")) { throw 'Unexpected SDK requirements.' }
-$certificate = ($verification | Select-String '^Signer #1 certificate SHA-256 digest: (.+)$').Matches.Groups[1].Value
-if (!$certificate) { throw 'Cannot read signing certificate fingerprint.' }
+$certificates = @($verification | Select-String 'certificate SHA-256 digest: ([0-9a-fA-F]{64})$' |
+    ForEach-Object { $_.Matches[0].Groups[1].Value.ToLowerInvariant() } | Sort-Object -Unique)
+if ($certificates.Count -ne 1) { throw 'Expected one release signing certificate.' }
+$certificate = $certificates[0]
 $notesPath = Join-Path $projectPath "docs\releases\$tag.md"
 Copy-Item -LiteralPath $notesPath -Destination (Join-Path $outputDirectory 'release-notes.md')
 $buildInfo = [ordered]@{
