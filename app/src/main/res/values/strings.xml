@@ -1,19 +1,46 @@
-<?xml version="1.0" encoding="utf-8"?><!--
- Copyright 2015 The Android Open Source Project
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
--->
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">RemoteCam</string>
-    <string name="capture">Capture</string>
+    <string name="app_name" translatable="false">RemoteCam</string>
+    <string name="stop">Stop</string>
+    <string name="preview">Preview</string>
+    <string name="stream">Stream</string>
+    <string name="sensor">Camera</string>
+    <string name="resolution">Resolution</string>
+    <string name="resolution_format">%1$d×%2$d · %3$d:%4$d</string>
+    <string name="quality">Quality</string>
+    <string name="stream_address">OBS Browser address · tap to copy</string>
+    <string name="copy_address">Copy stream address</string>
+    <string name="address_copied">Address copied</string>
+    <string name="connect_wifi">Connect to Wi-Fi to stream</string>
+    <string name="local_network_notice">Streaming uses unencrypted HTTP. Use a trusted local network.</string>
+    <string name="project_url" translatable="false">https://github.com/Desseres/RemoteCam</string>
+    <string name="fps">%1$d fps</string>
+    <string name="rate">%1$.1f Mb/s</string>
+    <string name="generated_rate_hint">Rate above: JPEG data produced by the camera.</string>
+    <string name="transfer_no_viewers">No receiver · capacity unknown</string>
+    <string name="transfer_legacy">MJPEG · playback buffering unknown</string>
+    <string name="transfer_warming">Collecting receiver feedback…</string>
+    <string name="transfer_good">Receiver keeping up</string>
+    <string name="transfer_busy">Receiver near its limit</string>
+    <string name="transfer_slow">Receiver slow or stalled</string>
+    <string name="transfer_summary">%1$s\nSent: %2$.1f Mb/s · receivers: %3$d (with feedback: %4$d)%5$s</string>
+    <string name="transfer_ack">\nReceiver cycle: %1$.0f ms · skipped: %2$.0f%%</string>
+    <string name="bandwidth_title">Latency &amp; bandwidth</string>
+    <string name="bandwidth_current">%1$d×%2$d · JPEG quality %3$d\nAverage JPEG: %4$.0f kB · captured: %5$d fps\nMeasured JPEG production: %6$.1f Mb/s</string>
+    <string name="bandwidth_wait">Enable Preview or Stream and wait for camera measurements.</string>
+    <string name="bandwidth_fps">FPS</string>
+    <string name="bandwidth_stream">JPEG Mb/s</string>
+    <string name="bandwidth_capacity">Plan for Mb/s</string>
+    <string name="bandwidth_number">%1$.1f</string>
+    <string name="bandwidth_fps_value">%1$d</string>
+    <string name="bandwidth_explanation">Estimates for one receiver, using the current scene and average JPEG size. The last column uses 2× headroom as a planning guideline, not a guarantee or a measured network speed. More detail or motion can increase JPEG sizes. Two receivers need roughly twice the total bandwidth. These FPS rows are calculations, not camera mode choices.</string>
+    <string name="bandwidth_legend" formatted="false">Receiver feedback colors (recent 2 seconds):\nGreen: cycle at most 80% of a camera frame interval and under 2% skipped frames.\nOrange: less headroom or 2–20% skipped.\nRed: cycle over two frame intervals, at least 20% skipped, or a stalled transfer.\nGray: no receiver, not enough samples, or MJPEG without feedback.\n\nThe receiver cycle includes sending, decoding, drawing to the browser canvas and the reply. It does not measure exposure time or the delay of OBS output, your display or audio. Sent rate includes all receivers; MJPEG reports writes without playback confirmation.</string>
+    <string name="bandwidth_obs">For low delay in OBS:\n1. Use Browser Source with %1$s. Set its width and height to the camera resolution and its FPS to 30.\n2. Disable or close the old MJPEG source to avoid duplicate traffic.\n3. If you keep Media Source with /cam.mjpeg, try Network Buffering = 0 MB; only raise it if reception becomes unstable.\n4. Prefer a wired PC and strong 5/6 GHz Wi-Fi, or a wired phone connection. Internet upload speed is not the same as LAN capacity.\n\nThe /view receiver allows one frame in flight and one latest frame waiting. Slow reception skips stale frames; JPEG quality and resolution are unchanged. Extra buffering adds delay; it cannot repair a sustained bandwidth deficit.\n\nFor lip sync, record a clap test in OBS. If audio is consistently ahead of video, delay that audio by the measured difference using Sync Offset. A changing delay must be fixed at its source first.</string>
+    <string name="permissions_title">Permissions required</string>
+    <string name="permissions_message">RemoteCam needs the camera and, on Android 17, local network access. If permission was permanently denied, enable it in system app settings.</string>
+    <string name="retry">Try again</string>
+    <string name="close">Close</string>
+    <string name="notification_channel">Camera streaming</string>
+    <string name="notification_title">RemoteCam is active</string>
+    <string name="notification_text">Open controls or stop the camera</string>
 </resources>

@@ -2,342 +2,202 @@ package com.samsung.android.scan3d.serv
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.graphics.ImageFormat
-import android.hardware.camera2.CameraCaptureSession
-import android.hardware.camera2.CameraCharacteristics
-import android.hardware.camera2.CameraDevice
-import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CaptureRequest
-import android.hardware.camera2.TotalCaptureResult
+import android.hardware.camera2.*
+import android.hardware.camera2.params.OutputConfiguration
+import android.hardware.camera2.params.SessionConfiguration
 import android.media.ImageReader
-import android.media.MediaCodec
-import android.media.MediaCodecInfo
-import android.media.MediaCodecList
-import android.media.MediaFormat
 import android.os.Handler
 import android.os.HandlerThread
-import android.os.Parcelable
+import android.os.SystemClock
 import android.util.Log
 import android.util.Size
 import android.view.Surface
-import com.samsung.android.scan3d.fragments.CameraFragment
 import com.samsung.android.scan3d.http.HttpService
+import com.samsung.android.scan3d.http.TransferStats
 import com.samsung.android.scan3d.util.Selector
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.parcelize.Parcelize
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
-import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
-class CamEngine(val context: Context) {
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.Executor
 
-    var http: HttpService? = null
-    var resW = 1280
-    var resH = 720
+data class CameraConfig(
+    val cameraId: String = "", val resolution: Size? = null,
+    val quality: Int = 80, val preview: Boolean = true, val stream: Boolean = false
+)
+data class CameraStatus(
+    val config: CameraConfig = CameraConfig(),
+    val sensors: List<Selector.SensorDesc> = emptyList(),
+    val sizes: List<Size> = emptyList(),
+    val fps: Int = 0, val sourceMbps: Double = 0.0, val averageFrameBytes: Double = 0.0,
+    val transfer: TransferStats = TransferStats(), val error: String? = null,
+    val stopped: Boolean = false
+)
 
-    var insidePause = false
-
-    var isShowingPreview: Boolean = false
-
-    private var cameraManager: CameraManager =
-        context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
-    private var cameraList: List<Selector.SensorDesc> =
-        Selector.enumerateCameras(cameraManager)
-
-    val camOutPutFormat = ImageFormat.JPEG // ImageFormat.YUV_420_888// ImageFormat.JPEG
-
-    val executor = Executors.newSingleThreadExecutor()
-
-    fun getEncoder(mimeType: String, resW: Int, resH: Int): MediaCodec? {
-        fun selectCodec(mimeType: String, needEncoder: Boolean): MediaCodecInfo? {
-            val list = MediaCodecList(0).getCodecInfos()
-            list.forEach {
-                if (it.isEncoder) {
-                    Log.i(
-                        "CODECS",
-                        "We got type " + it.name + " " + it.supportedTypes.contentToString()
-                    )
-                    if (it.supportedTypes.any { e -> e.equals(mimeType, ignoreCase = true) }) {
-                        return it
-                    }
-                }
-            }
-            return null
-        }
-
-        val colorFormat = MediaCodecInfo.CodecCapabilities.COLOR_FormatCbYCrY;
-        val codec = selectCodec("video/avc", true) ?: return null
-        val format = MediaFormat.createVideoFormat("video/avc", resW, resH)
-        format.setString(MediaFormat.KEY_MIME, "video/avc");
-        format.setInteger(MediaFormat.KEY_FRAME_RATE, 30);
-        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 5);
-        format.setInteger(MediaFormat.KEY_BIT_RATE, 2_000_000);
-        Log.i("CODECS", "video/avc: " + codec)
-        val encoder = MediaCodec.createByCodecName(codec.getName());
-        encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
-        encoder.start();
-        return encoder
-    }
-
-
-    var viewState: CameraFragment.Companion.ViewState = CameraFragment.Companion.ViewState(
-        true,
-        stream = false,
-        cameraId = "0",
-        quality = 80,
-        resolutionIndex = null
-    )
-
-    /** [CameraCharacteristics] corresponding to the provided Camera ID */
-    var characteristics: CameraCharacteristics =
-        cameraManager.getCameraCharacteristics(viewState.cameraId)
-
-    var sizes = characteristics.get(
-        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
-    )!!.getOutputSizes(camOutPutFormat).reversed()
-
-
-    private lateinit var imageReader: ImageReader
-
-
-    private val cameraThread = HandlerThread("CameraThread").apply { start() }
-    private val cameraHandler = Handler(cameraThread.looper)
-
-    private lateinit var camera: CameraDevice
-
-    var previewSurface: Surface? = null
-
+/** All camera ownership and callbacks are serialized on one handler, never the UI thread. */
+class CamEngine(context: Context, private val http: HttpService) {
+    private val manager = context.getSystemService(CameraManager::class.java)
+    private val settings = CameraSettings(context)
+    private val thread = HandlerThread("RemoteCam-camera").apply { start() }
+    private val handler = Handler(thread.looper)
+    private val executor = Executor { handler.post(it) }
+    private val mutableStatus = MutableStateFlow(CameraStatus())
+    val status = mutableStatus.asStateFlow()
+    private var camera: CameraDevice? = null
     private var session: CameraCaptureSession? = null
+    private var reader: ImageReader? = null
+    private var previewSurface: Surface? = null
+    private var generation = 0
+    @Volatile private var destroyed = false
+    private var lastStats = SystemClock.elapsedRealtime()
+    private var frameCount = 0
+    private var byteCount = 0L
 
-    private fun stopRunning() {
-        if (session != null) {
-            Log.i("CAMERA", "close")
-            session!!.stopRepeating()
-            session!!.close()
-            session = null
-            camera.close()
-            imageReader.close()
+    init {
+        handler.post {
+            try {
+                val sensors = Selector.enumerateCameras(manager)
+                check(sensors.isNotEmpty()) { "No JPEG camera is available" }
+                mutableStatus.value = CameraStatus(
+                    config = settings.load(sensors.map { it.cameraId }), sensors = sensors)
+                restart()
+            } catch (e: Exception) { fail(e) }
         }
     }
 
-    fun restart() {
-        stopRunning()
-        runBlocking { initializeCamera() }
-
+    fun configure(config: CameraConfig) {
+        handler.post {
+            if (destroyed || config == mutableStatus.value.config) return@post
+            if (mutableStatus.value.sensors.none { it.cameraId == config.cameraId }) return@post
+            mutableStatus.value = mutableStatus.value.copy(config = config.copy(quality = config.quality.coerceIn(1, 100)))
+            restart()
+        }
     }
 
-    @SuppressLint("MissingPermission")
-    private suspend fun openCamera(
-        manager: CameraManager,
-        cameraId: String,
-        handler: Handler? = null
-    ): CameraDevice = suspendCancellableCoroutine { cont ->
-        manager.openCamera(cameraId, object : CameraDevice.StateCallback() {
-            override fun onOpened(device: CameraDevice) = cont.resume(device)
-
-            override fun onDisconnected(device: CameraDevice) {
-                Log.w("CamEngine", "Camera $cameraId has been disconnected")
-
-            }
-
-            override fun onError(device: CameraDevice, error: Int) {
-                val msg = when (error) {
-                    ERROR_CAMERA_DEVICE -> "Fatal (device)"
-                    ERROR_CAMERA_DISABLED -> "Device policy"
-                    ERROR_CAMERA_IN_USE -> "Camera in use"
-                    ERROR_CAMERA_SERVICE -> "Fatal (service)"
-                    ERROR_MAX_CAMERAS_IN_USE -> "Maximum cameras in use"
-                    else -> "Unknown"
-                }
-                val exc = RuntimeException("Camera $cameraId error: ($error) $msg")
-                Log.e("CamEngine", exc.message, exc)
-                if (cont.isActive) cont.resumeWithException(exc)
-            }
-        }, handler)
+    fun setPreview(surface: Surface?) {
+        handler.post {
+            if (destroyed || previewSurface === surface) return@post
+            previewSurface = surface
+            restart()
+        }
     }
 
-    /**
-     * Starts a [CameraCaptureSession] and returns the configured session (as the result of the
-     * suspend coroutine
-     */
-    private suspend fun createCaptureSession(
-        device: CameraDevice,
-        targets: List<Surface>,
-        handler: Handler? = null
-    ): CameraCaptureSession = suspendCoroutine { cont ->
-
-        // Create a capture session using the predefined targets; this also involves defining the
-        // session state callback to be notified of when the session is ready
-        device.createCaptureSession(targets, object : CameraCaptureSession.StateCallback() {
-
-            override fun onConfigured(session: CameraCaptureSession) = cont.resume(session)
-
-            override fun onConfigureFailed(session: CameraCaptureSession) {
-                val exc = RuntimeException("Camera ${device.id} session configuration failed")
-                Log.e("CamEngine", exc.message, exc)
-                cont.resumeWithException(exc)
-            }
-        }, handler)
+    private fun closeCamera() {
+        generation++
+        runCatching { session?.stopRepeating() }
+        session?.close()
+        session = null
+        camera?.close()
+        camera = null
+        reader?.close()
+        reader = null
     }
 
-    suspend fun initializeCamera() {
-        Log.i("CAMERA", "initializeCamera")
-
-
-        val showLiveSurface = viewState.preview && !insidePause && previewSurface != null
-        isShowingPreview = showLiveSurface
-
-        stopRunning()
-
-
-        characteristics = cameraManager.getCameraCharacteristics(viewState.cameraId)
-        sizes = characteristics.get(
-            CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
-        )!!.getOutputSizes(camOutPutFormat).reversed()
-
-        if (viewState.resolutionIndex == null) {
-
-            var selIndex = 0
-            for (formatIndex in 0 until sizes.size) {
-                if (sizes[formatIndex].height <= 720) {
-                    selIndex = formatIndex
-                }
-            }
-            viewState.resolutionIndex = selIndex
-        }
-        resW = sizes[viewState.resolutionIndex!!].width
-        resH = sizes[viewState.resolutionIndex!!].height
-
-
-
-        camera = openCamera(cameraManager, viewState.cameraId, cameraHandler)
-        imageReader = ImageReader.newInstance(
-            resW, resH, camOutPutFormat, 4
-        )
-        var targets = listOf(imageReader.surface)
-        if (showLiveSurface) {
-
-
-            targets = targets.plus(previewSurface!!)
-        }
-        session = createCaptureSession(camera, targets, cameraHandler)
-        val captureRequest = camera.createCaptureRequest(
-            CameraDevice.TEMPLATE_RECORD //TEMPLATE_PREVIEW
-        )
-        if (showLiveSurface) {
-            captureRequest.addTarget(previewSurface!!)
-        }
-        captureRequest.addTarget(imageReader.surface)
-        captureRequest.set(CaptureRequest.JPEG_QUALITY, viewState.quality.toByte())
-        var lastTime = System.currentTimeMillis()
-
-
-        var kodd = 0
-        var aquired = AtomicInteger(0)
-        session!!.setRepeatingRequest(
-            captureRequest.build(),
-            object : CameraCaptureSession.CaptureCallback() {
-
-                override fun onCaptureCompleted(
-                    session: CameraCaptureSession,
-                    request: CaptureRequest,
-                    result: TotalCaptureResult
-                ) {
-                    super.onCaptureCompleted(session, request, result)
-
-
-                    var lastImg = imageReader.acquireNextImage()
-
-                    if (aquired.get() > 1 && lastImg != null) {
-                        lastImg.close()
-                        Log.i("COM", "EARLY CLOSE")
-                        lastImg = null
-                    }
-
-                    val img = lastImg ?: return
-                    aquired.incrementAndGet()
-                    var curTime = System.currentTimeMillis()
-                    val delta = curTime - lastTime
-                    lastTime = curTime
-                    kodd += 1
-
-                    if (camOutPutFormat == ImageFormat.JPEG) {
-                        // executor.execute(Runnable {
-                        val buffer = img.planes[0].buffer
-                        val bytes = ByteArray(buffer.remaining()).apply { buffer.get(this) }
-
-                        if (kodd % 10 == 0) {
-                            updateViewQuick(
-                                DataQuick(
-                                    delta.toInt(),
-                                    (30 * bytes.size / 1000)
-                                )
-                            )
+    @SuppressLint("MissingPermission") // The activity grants CAMERA before starting the private service.
+    private fun restart() {
+        closeCamera()
+        if (destroyed) return
+        try {
+            var config = mutableStatus.value.config
+            if (config.cameraId.isEmpty()) return
+            val c = manager.getCameraCharacteristics(config.cameraId)
+            val sizes = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+                ?.getOutputSizes(ImageFormat.JPEG)?.sortedBy { it.width.toLong() * it.height }
+                .orEmpty()
+            check(sizes.isNotEmpty()) { "Camera has no JPEG output sizes" }
+            val size = config.resolution?.takeIf { it in sizes }
+                ?: sizes.lastOrNull { it.width <= 1280 && it.height <= 720 } ?: sizes.first()
+            config = config.copy(resolution = size)
+            settings.save(config)
+            mutableStatus.value = mutableStatus.value.copy(config = config, sizes = sizes, error = null,
+                fps = 0, sourceMbps = 0.0, averageFrameBytes = 0.0, transfer = TransferStats())
+            http.streaming = config.stream
+            val preview = previewSurface?.takeIf { config.preview && it.isValid }
+            if (!config.stream && preview == null) return
+            val ticket = generation
+            val imageReader = ImageReader.newInstance(size.width, size.height, ImageFormat.JPEG, 3)
+            reader = imageReader
+            imageReader.setOnImageAvailableListener({ source ->
+                if (ticket != generation || destroyed) return@setOnImageAvailableListener
+                try {
+                    source.acquireLatestImage()?.use { image ->
+                        val buffer = image.planes[0].buffer
+                        val bytes = ByteArray(buffer.remaining()).also { buffer.get(it) }
+                        http.publish(bytes)
+                        frameCount++
+                        byteCount += bytes.size
+                        val now = SystemClock.elapsedRealtime()
+                        val elapsed = now - lastStats
+                        if (elapsed >= 1000) {
+                            mutableStatus.value = mutableStatus.value.copy(
+                                fps = (frameCount * 1000L / elapsed).toInt(),
+                                sourceMbps = byteCount * 8.0 / elapsed / 1000.0,
+                                averageFrameBytes = byteCount.toDouble() / frameCount,
+                                transfer = http.transfers.snapshot())
+                            lastStats = now; frameCount = 0; byteCount = 0
                         }
-
-                        img.close()
-                        aquired.decrementAndGet()
-                        if (viewState.stream) {
-
-                            http?.channel?.trySend(
-                                bytes
-                            )
-
-                        }
-
                     }
+                } catch (e: Exception) { if (ticket == generation) fail(e) }
+            }, handler)
+            manager.openCamera(config.cameraId, object : CameraDevice.StateCallback() {
+                override fun onOpened(device: CameraDevice) {
+                    if (ticket != generation || destroyed) { device.close(); return }
+                    camera = device
+                    try {
+                        val outputs = listOfNotNull(imageReader.surface, preview)
+                        device.createCaptureSession(SessionConfiguration(
+                            SessionConfiguration.SESSION_REGULAR, outputs.map(::OutputConfiguration),
+                            executor, object : CameraCaptureSession.StateCallback() {
+                                override fun onConfigured(captureSession: CameraCaptureSession) {
+                                    if (ticket != generation || destroyed) { captureSession.close(); return }
+                                    session = captureSession
+                                    try {
+                                        val request = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+                                            outputs.forEach(::addTarget)
+                                            set(CaptureRequest.JPEG_QUALITY, config.quality.toByte())
+                                            val afModes = c.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES) ?: intArrayOf()
+                                            if (CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO in afModes)
+                                                set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_VIDEO)
+                                        }
+                                        lastStats = SystemClock.elapsedRealtime(); frameCount = 0; byteCount = 0
+                                        captureSession.setRepeatingRequest(request.build(), null, handler)
+                                    } catch (e: Exception) { fail(e) }
+                                }
+                                override fun onConfigureFailed(s: CameraCaptureSession) {
+                                    s.close()
+                                    if (ticket == generation) fail(IllegalStateException("Unsupported camera output combination; try a lower resolution"))
+                                }
+                            }))
+                    } catch (e: Exception) { fail(e) }
                 }
-            },
-            cameraHandler
-        )
-        updateView()
+                override fun onDisconnected(device: CameraDevice) {
+                    device.close()
+                    if (ticket == generation) fail(IllegalStateException("Camera disconnected"))
+                }
+                override fun onError(device: CameraDevice, error: Int) {
+                    device.close()
+                    if (ticket == generation) fail(IllegalStateException("Camera error $error; check that another app is not using it"))
+                }
+            }, handler)
+        } catch (e: Exception) { fail(e) }
+    }
+
+    private fun fail(e: Exception) {
+        Log.e("RemoteCam", "Camera failed", e)
+        closeCamera()
+        http.streaming = false
+        mutableStatus.value = mutableStatus.value.copy(error = e.message ?: "Camera error",
+            config = mutableStatus.value.config.copy(stream = false), fps = 0, sourceMbps = 0.0,
+            averageFrameBytes = 0.0, transfer = TransferStats())
     }
 
     fun destroy() {
-        stopRunning()
-        cameraThread.quitSafely()
+        if (destroyed) return
+        destroyed = true
+        http.streaming = false
+        handler.post {
+            closeCamera()
+            mutableStatus.value = mutableStatus.value.copy(stopped = true)
+            thread.quitSafely()
+        }
     }
-
-    fun updateView() {
-        val intent = Intent("UpdateFromCameraEngine") //FILTER is a string to identify this intent
-        intent.putExtra(
-            "data",
-            Data(
-                cameraList,
-                cameraList.find { it.cameraId == viewState.cameraId }!!,
-                resolutions = sizes,
-                resolutionSelected = viewState.resolutionIndex!!
-            )
-        )
-        context.sendBroadcast(intent)
-    }
-
-    fun updateViewQuick(dq: DataQuick) {
-        val intent = Intent("UpdateFromCameraEngine") //FILTER is a string to identify this intent
-        intent.putExtra(
-            "dataQuick", dq
-        )
-        context.sendBroadcast(intent)
-    }
-
-    companion object {
-        @Parcelize
-        data class Data(
-            val sensors: List<Selector.SensorDesc>,
-            val sensorSelected: Selector.SensorDesc,
-            val resolutions: List<Size>,
-            val resolutionSelected: Int,
-        ) : Parcelable
-
-        @Parcelize
-        data class DataQuick(
-            val ms: Int,
-            val rateKbs: Int
-        ) : Parcelable
-    }
-
-
 }

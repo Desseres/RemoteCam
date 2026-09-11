@@ -61,7 +61,8 @@ class AutoFitSurfaceView @JvmOverloads constructor(
 
 
             val currentRatio = width.toFloat()/height.toFloat()
-            val inv = 1.0/aspectRatio
+            val inv = if (resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT)
+                1.0 / aspectRatio else aspectRatio.toDouble()
             val newWidth: Int
             val newHeight: Int
             if(currentRatio > inv){
