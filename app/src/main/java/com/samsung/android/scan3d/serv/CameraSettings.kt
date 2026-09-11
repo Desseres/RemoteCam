@@ -21,8 +21,24 @@ class CameraSettings(context: Context) {
             resolution = if (cameraId == savedCamera && width > 0 && height > 0) Size(width, height) else null,
             quality = preferences.getInt("quality", 80).coerceIn(1, 100),
             preview = preferences.getBoolean("preview", true),
-            stream = preferences.getBoolean("stream", false)
+            stream = preferences.getBoolean("stream", false),
+            mode = runCatching { StreamMode.valueOf(preferences.getString("mode", "JPEG")!!) }.getOrDefault(StreamMode.JPEG),
+            bitrateMbps = preferences.getInt("bitrate_mbps", 12).coerceIn(2, 40),
+            rotationDegrees = preferences.getInt("stream_rotation", preferences.getInt("rtc_rotation", -1))
+                .takeIf { it in listOf(0, 90, 180, 270) } ?: -1,
+            tuning = tuningFor(cameraId)
         )
+    }
+
+    fun tuningFor(cameraId: String) = CameraTuning(
+        runCatching { FocusMode.valueOf(preferences.getString("focus_mode_$cameraId", "AUTO")!!) }.getOrDefault(FocusMode.AUTO),
+        preferences.getFloat("focus_distance_$cameraId", 0f), preferences.getFloat("zoom_$cameraId", 1f))
+
+    fun resolutionFor(cameraId: String, mode: StreamMode): Size? {
+        val key = "${cameraId}_${mode.name}"
+        val width = preferences.getInt("width_$key", 0)
+        val height = preferences.getInt("height_$key", 0)
+        return if (width > 0 && height > 0) Size(width, height) else null
     }
 
     fun save(config: CameraConfig) {
@@ -37,6 +53,15 @@ class CameraSettings(context: Context) {
             .putInt("quality", config.quality)
             .putBoolean("preview", config.preview)
             .putBoolean("stream", config.stream)
+            .putString("mode", config.mode.name)
+            .putInt("bitrate_mbps", config.bitrateMbps)
+            .putInt("stream_rotation", config.rotationDegrees)
+            .putString("focus_mode_${config.cameraId}", config.tuning.focusMode.name)
+            .putFloat("focus_distance_${config.cameraId}", config.tuning.focusDistance)
+            .putFloat("zoom_${config.cameraId}", config.tuning.zoom)
+            .remove("rtc_rotation")
+            .putInt("width_${config.cameraId}_${config.mode.name}", size.width)
+            .putInt("height_${config.cameraId}_${config.mode.name}", size.height)
             .commit()
         if (saved) lastSaved = config
         else Log.w("RemoteCam", "Could not save camera configuration")

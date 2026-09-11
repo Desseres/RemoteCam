@@ -7,13 +7,60 @@
     <string name="sensor">Camera</string>
     <string name="resolution">Resolution</string>
     <string name="resolution_format">%1$d×%2$d · %3$d:%4$d</string>
-    <string name="quality">Quality</string>
-    <string name="stream_address">OBS Browser address · tap to copy</string>
+    <string name="quality">JPEG quality</string>
+    <string name="stream_mode">Format</string>
+    <string name="mode_jpeg">JPEG</string>
+    <string name="mode_rtc">H.264 + WebRTC</string>
+    <string name="bitrate_limit">Bitrate limit</string>
+    <string name="bitrate_option">%1$d Mb/s</string>
+    <string name="stream_address">JPEG · OBS Browser · tap to copy</string>
+    <string name="mjpeg_address_label">MJPEG · Media Source / VLC · tap to copy</string>
+    <string name="rtc_address_label">H.264 · OBS Browser · tap to copy</string>
+    <string name="address_mode_hint">JPEG enables the JPEG Browser and MJPEG addresses. H.264 + WebRTC enables OBS Browser and go2rtc. Both JPEG addresses carry identical image bytes.</string>
+    <string name="go2rtc_address_label">H.264 · go2rtc source · tap to copy</string>
+    <string name="guide_go2rtc_title">go2rtc · H.264 without a browser</string>
+    <string name="guide_go2rtc_body">For go2rtc, copy the go2rtc source address from the main screen into your stream configuration. Keep the webrtc: prefix and /whep path. /webrtc is an HTML player, not a direct media source. Video remains H.264; this connection method does not re-encode it or add audio.</string>
+    <string name="rtc_rate_hint">H.264 video sent to all receivers. Bitrate adapts up to your per-receiver limit.</string>
+    <string name="rtc_summary">WebRTC · connected: %1$d / %2$d\nEncoded: %3$.0f fps · %4$s\n%5$s</string>
+    <string name="rtc_rtt">Network round trip: %1$.0f ms</string>
+    <string name="rtc_connecting">Waiting for receiver feedback</string>
+    <string name="rtc_adapting">Adapting: %1$s</string>
+    <string name="rtc_stable">No reported encoder limitation</string>
     <string name="copy_address">Copy stream address</string>
     <string name="address_copied">Address copied</string>
     <string name="connect_wifi">Connect to Wi-Fi to stream</string>
-    <string name="local_network_notice">Streaming uses unencrypted HTTP. Use a trusted local network.</string>
-    <string name="project_url" translatable="false">https://github.com/Desseres/RemoteCam</string>
+    <string name="local_network_notice">Use a trusted local network. JPEG and signaling use unencrypted HTTP; WebRTC media uses DTLS-SRTP.</string>
+    <string name="original_project_url" translatable="false">https://github.com/Ruddle/RemoteCam</string>
+    <string name="info">Info</string>
+    <string name="focus_label">Focus</string>
+    <string name="guide_lens_title">Focus and zoom on a tripod</string>
+    <string name="guide_lens_body">Automatic keeps focusing as the scene changes. Focus &amp; lock focuses once and holds until you tap Refocus or reopen the camera. Manual starts at the measured lens position and lets you adjust from far to near; it remembers that position for this camera. Distance labels are approximate and appear only when the camera reports calibrated units. Zoom and focus affect preview and all stream formats. Digital zoom cannot recover missing detail, and objects closer than the lens can focus must be moved farther away.</string>
+    <string name="focus_auto">Automatic</string>
+    <string name="focus_locked">Focus &amp; lock</string>
+    <string name="focus_manual">Manual</string>
+    <string name="refocus">Refocus</string>
+    <string name="focus_distance_control">Focus distance, far to near</string>
+    <string name="focus_fixed">This camera has a fixed-focus lens.</string>
+    <string name="focus_manual_hint">Far ← → Near. Manual holds the lens position and is saved for this camera. Move the phone farther away if the object is too close to focus.</string>
+    <string name="focus_lock_failed">Locked, but focus was not found. Move farther away or tap Refocus.</string>
+    <string name="focus_lock_ok">Focus locked. Refocus finds a new distance; reopening the camera focuses again.</string>
+    <string name="focus_lock_scanning">Finding focus, then locking…</string>
+    <string name="focus_auto_hint">Autofocus follows the scene. Choose Manual to hold the current lens position, or Focus &amp; lock to focus once.</string>
+    <string name="focus_infinity">Far / infinity</string>
+    <string name="focus_centimeters">Focus distance ≈ %1$.1f cm</string>
+    <string name="focus_percent">Lens position: %1$d%% toward near</string>
+    <string name="zoom_label">Zoom</string>
+    <string name="zoom_reset">1×</string>
+    <string name="zoom_value">%1$.2f×  ·  %2$.1f–%3$.1f×</string>
+    <string name="zoom_hint">Zoom affects preview and every stream. Hardware determines the range; digital zoom magnifies pixels and can reduce detail.</string>
+    <string name="about_version">Version %1$s</string>
+    <string name="about_author_title">Thanks to the original author</string>
+    <string name="about_author_body">Built on the original RemoteCam by Thomas SIMON (Ruddle). Thank you for the inspiration and for sharing this app freely with everyone.\n\nOriginal repository: Ruddle/RemoteCam\nCopyright © 2023 Thomas SIMON</string>
+    <string name="about_original_project">View original project</string>
+    <string name="about_free_title">Free. Open source. MIT.</string>
+    <string name="about_free_body">RemoteCam remains free and open source under the MIT license. No ads, subscriptions or paid feature unlocks. The original copyright and license are preserved.</string>
+    <string name="about_update_title">Updated for modern Android</string>
+    <string name="about_update_body">This edition updates the original app with modern Android SDKs, saved settings, JPEG streaming and H.264 + WebRTC. Built for Android 17 / API 37; tested on Android 16.</string>
     <string name="fps">%1$d fps</string>
     <string name="rate">%1$.1f Mb/s</string>
     <string name="generated_rate_hint">Rate above: JPEG data produced by the camera.</string>
@@ -26,6 +73,50 @@
     <string name="transfer_summary">%1$s\nSent: %2$.1f Mb/s · receivers: %3$d (with feedback: %4$d)%5$s</string>
     <string name="transfer_ack">\nReceiver cycle: %1$.0f ms · skipped: %2$.0f%%</string>
     <string name="bandwidth_title">Latency &amp; bandwidth</string>
+    <string name="guide_title">Streaming guide</string>
+    <string name="guide_subtitle">Choose a format. Keep the picture flowing.</string>
+    <string name="guide_formats">Formats</string>
+    <string name="guide_bandwidth">Bandwidth</string>
+    <string name="guide_obs">OBS setup</string>
+    <string name="guide_current">YOUR CURRENT SETTINGS</string>
+    <string name="guide_jpeg_title">JPEG · two ways to receive</string>
+    <string name="guide_jpeg_body">Both addresses carry the exact same JPEG image bytes, resolution and quality. The difference is how the receiver handles them.</string>
+    <string name="guide_browser_title">Browser · /view</string>
+    <string name="guide_browser_body">For OBS Browser Source. The receiver confirms each decoded frame. One frame travels while only the newest frame waits. Slow reception skips old frames instead of growing the queue.</string>
+    <string name="guide_mjpeg_title">MJPEG · /cam.mjpeg</string>
+    <string name="guide_mjpeg_body">For OBS Media Source, VLC and compatible tools. This standard stream remains available in JPEG mode. The player controls its own buffer; the phone cannot confirm when it displays a frame.</string>
+    <string name="guide_rtc_title">H.264 + WebRTC</string>
+    <string name="guide_rtc_body">For OBS Browser Source at /webrtc. The camera feeds a hardware H.264 encoder directly. WebRTC adapts bitrate and may reduce FPS to keep up; it is configured to maintain resolution. It uses no JPEG intermediate and no phone microphone.</string>
+    <string name="guide_modes_note">Choose the active format on the main screen. JPEG retains its quality control and camera sizes. WebRTC has a separate bitrate limit and shows sizes supported by both the camera and hardware encoder. The two modes run separately.</string>
+    <string name="guide_rtc_current">%1$d×%2$d · H.264\nLimit per receiver: %3$d Mb/s\nSent total: %4$.1f Mb/s</string>
+    <string name="guide_table_title">Plan your network capacity</string>
+    <string name="guide_rtc_table_note">The limit is a ceiling, not a promise of constant quality or bandwidth use. Allow roughly twice that rate per receiver as practical headroom. Actual use adapts to the scene and connection. This is not a speed test.</string>
+    <string name="guide_table_limit">Limit\nMb/s</string>
+    <string name="guide_table_one">1 viewer\nMb/s</string>
+    <string name="guide_table_two">2 viewers\nMb/s</string>
+    <string name="guide_green_title">Green · keeping up</string>
+    <string name="guide_green_body" formatted="false">JPEG: receiver cycle ≤80% of a frame interval and fewer than 2% skipped frames. WebRTC: connected, encoding at least 80% of captured FPS, with no reported encoder limitation.</string>
+    <string name="guide_orange_title">Orange · less headroom</string>
+    <string name="guide_orange_body" formatted="false">JPEG: a longer cycle or 2–20% skipped frames. WebRTC: the encoder reports a bandwidth/CPU limit, or encoded FPS is lower than captured FPS.</string>
+    <string name="guide_red_title">Red · slow or stalled</string>
+    <string name="guide_red_body" formatted="false">JPEG: cycle exceeds two frame intervals, at least 20% of frames are skipped, or transfer stalls. For WebRTC, check connection state and the receiver if video stops.</string>
+    <string name="guide_gray_title">Gray · not enough information</string>
+    <string name="guide_gray_body">No receiver, connection in progress, missing samples, or MJPEG without playback feedback. Color is a diagnostic hint, not a measurement of end-to-end delay.</string>
+    <string name="guide_measurement_title">These numbers measure different things</string>
+    <string name="guide_measurement_body">JPEG receiver cycle includes transfer, decode, canvas draw and reply. WebRTC RTT measures the network round trip. Neither includes the complete camera-to-OBS/display/audio path. JPEG statistics use a recent two-second window; WebRTC uses its native sender reports.</string>
+    <string name="guide_obs_step1">1 · Add the matching source</string>
+    <string name="guide_obs_step1_body">Use Browser Source for /view (JPEG) or /webrtc (H.264), with custom FPS set to 30. Stream rotation on the phone applies to all three addresses. Match the source to the rotated picture: for portrait Full HD use width 1080 and height 1920; for landscape use 1920×1080. A landscape source keeps the full portrait picture with side bars. Fit the source proportionally; do not stretch it or apply the same rotation again in OBS.</string>
+    <string name="guide_copy_jpeg">Copy JPEG Browser address</string>
+    <string name="guide_copy_mjpeg">Copy MJPEG address</string>
+    <string name="guide_copy_rtc">Copy H.264 WebRTC address</string>
+    <string name="guide_obs_step2">2 · Avoid duplicate traffic</string>
+    <string name="guide_obs_step2_body">Close unused viewers and the previous camera source. For Browser Source, enable “Shutdown source when not visible” if hidden sources should disconnect. Multiple receivers each need bandwidth and WebRTC encoding resources.</string>
+    <string name="guide_obs_step3">3 · Keep buffering small</string>
+    <string name="guide_obs_step3_body">For MJPEG in Media Source, start with Network Buffering = 0 MB. Raise it only if necessary for stability. WebRTC manages its jitter buffer automatically. More buffering adds delay and cannot repair a sustained bandwidth shortage.</string>
+    <string name="guide_network_title">Use your local network well</string>
+    <string name="guide_network_body">Prefer Ethernet for the PC and strong 5/6 GHz Wi-Fi or a wired connection for the phone. Internet upload speed is not LAN capacity. WebRTC connects directly on the LAN without a public STUN/TURN server; network isolation can prevent connection.</string>
+    <string name="guide_audio_title">Match picture and microphone</string>
+    <string name="guide_audio_body">Record a clap test in OBS. If sound is consistently ahead of the image, delay that microphone by the measured difference using Advanced Audio Properties → Sync Offset. For example, audio 150 ms early needs +150 ms. Fix changing video delay before choosing an offset.</string>
     <string name="bandwidth_current">%1$d×%2$d · JPEG quality %3$d\nAverage JPEG: %4$.0f kB · captured: %5$d fps\nMeasured JPEG production: %6$.1f Mb/s</string>
     <string name="bandwidth_wait">Enable Preview or Stream and wait for camera measurements.</string>
     <string name="bandwidth_fps">FPS</string>
@@ -34,8 +125,6 @@
     <string name="bandwidth_number">%1$.1f</string>
     <string name="bandwidth_fps_value">%1$d</string>
     <string name="bandwidth_explanation">Estimates for one receiver, using the current scene and average JPEG size. The last column uses 2× headroom as a planning guideline, not a guarantee or a measured network speed. More detail or motion can increase JPEG sizes. Two receivers need roughly twice the total bandwidth. These FPS rows are calculations, not camera mode choices.</string>
-    <string name="bandwidth_legend" formatted="false">Receiver feedback colors (recent 2 seconds):\nGreen: cycle at most 80% of a camera frame interval and under 2% skipped frames.\nOrange: less headroom or 2–20% skipped.\nRed: cycle over two frame intervals, at least 20% skipped, or a stalled transfer.\nGray: no receiver, not enough samples, or MJPEG without feedback.\n\nThe receiver cycle includes sending, decoding, drawing to the browser canvas and the reply. It does not measure exposure time or the delay of OBS output, your display or audio. Sent rate includes all receivers; MJPEG reports writes without playback confirmation.</string>
-    <string name="bandwidth_obs">For low delay in OBS:\n1. Use Browser Source with %1$s. Set its width and height to the camera resolution and its FPS to 30.\n2. Disable or close the old MJPEG source to avoid duplicate traffic.\n3. If you keep Media Source with /cam.mjpeg, try Network Buffering = 0 MB; only raise it if reception becomes unstable.\n4. Prefer a wired PC and strong 5/6 GHz Wi-Fi, or a wired phone connection. Internet upload speed is not the same as LAN capacity.\n\nThe /view receiver allows one frame in flight and one latest frame waiting. Slow reception skips stale frames; JPEG quality and resolution are unchanged. Extra buffering adds delay; it cannot repair a sustained bandwidth deficit.\n\nFor lip sync, record a clap test in OBS. If audio is consistently ahead of video, delay that audio by the measured difference using Sync Offset. A changing delay must be fixed at its source first.</string>
     <string name="permissions_title">Permissions required</string>
     <string name="permissions_message">RemoteCam needs the camera and, on Android 17, local network access. If permission was permanently denied, enable it in system app settings.</string>
     <string name="retry">Try again</string>
@@ -43,4 +132,9 @@
     <string name="notification_channel">Camera streaming</string>
     <string name="notification_title">RemoteCam is active</string>
     <string name="notification_text">Open controls or stop the camera</string>
+    <string name="rotation_label">Stream rotation</string>
+    <string name="rotation_auto">Automatic</string>
+    <string name="rotation_option">%1$d° clockwise</string>
+    <string name="rotation_hint">WebRTC rotation: manual angles start from upright portrait and stay fixed when you turn the phone. Applies immediately to receivers; the local camera preview is unchanged.</string>
+    <string name="rotation_jpeg_hint">Rotation applies to both JPEG Browser and MJPEG. Manual angles start from upright portrait. The camera rotates the JPEG; if it only writes EXIF, the app rotates and re-encodes at quality 100 for compatible playback. That fallback can increase CPU use and bandwidth. Local preview is unchanged.</string>
 </resources>

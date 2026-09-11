@@ -21,16 +21,24 @@ Android implementation.
 
 ## Updated for modern Android
 
-The current development version is **0.1.0**:
+The current version is **0.3.0**:
 
 - **Android 17 / API 37** compile and target SDK, with Android 9 / API 28 as the minimum.
 - Updated build tools: **Android Gradle Plugin 9.4.0**, **Gradle 9.7.1** and Java 17 bytecode.
 - Updated AndroidX libraries, Kotlin coroutines and **Ktor 3.5.2**.
 - Camera foreground service and permission handling for modern Android versions.
 - Camera and resolution selection, aspect-ratio labels and adjustable JPEG quality.
+- Camera-supported zoom, autofocus lock and manual focus, saved separately for each camera.
 - Saved camera, resolution, quality, Preview and Stream settings between launches.
+- Toggle Preview without restarting an active stream; hiding it gives settings the full screen.
 - A browser receiver that skips stale frames to limit accumulated delay.
+- Optional hardware **H.264 + WebRTC** streaming, with an adjustable bitrate limit.
+- Direct go2rtc input via HTTP/SDP at `/whep`, alongside the existing browser player.
+- Saved stream rotation for all three addresses: automatic or fixed 0°, 90°, 180° and 270° clockwise.
+- Separate, copyable JPEG Browser, MJPEG and WebRTC addresses.
 - Bandwidth in **Mb/s**, receiver feedback colors and a bandwidth planning table.
+- A redesigned in-app guide with tabs, readable cards, tables and OBS setup steps.
+- Bottom-of-screen guide and Info buttons; original author credits and project details in Info.
 
 Tested on a physical **Android 16** phone. Android 17 is the build target;
 runtime behavior on Android 17 and other devices still needs testing.
@@ -63,22 +71,115 @@ settings and does not move the repository. Use `-BuildRoot` to choose another
 ASCII path if that directory is already used by another checkout.
 
 Build and install your own development version using Android Studio or Android
-SDK tools. Release builds require your own signing configuration.
+SDK tools. For a signed APK suitable for a GitHub Release, see the
+[release packaging and signing guide](docs/releases.md) and
+[0.3.0 release notes](docs/releases/v0.3.0.md).
 
 ## Use with OBS
 
+### go2rtc input
+
+Download go2rtc from its [official releases](https://github.com/AlexxIT/go2rtc/releases/).
+See the **[setup guide with examples (Polski)](docs/go2rtc.md)** for Windows setup,
+OBS Browser/RTSP sources, multiple phones and troubleshooting, or start with the
+[example go2rtc.yaml](examples/go2rtc.yaml).
+
+For freezes after packet loss in go2rtc 1.9.14, see the
+[local NACK retransmission fix and regression test](patches/README.md).
+This fixes the relay executable without changing camera quality or adding a
+playback buffer; it is a local patch, not an official go2rtc release.
+
+Select **H.264 + WebRTC** and enable **Stream** on the phone. For go2rtc, use the
+separate source address shown in the application, including the `webrtc:` prefix:
+
+```yaml
+streams:
+  H6:
+    - webrtc:http://192.168.1.11:8080/whep
+```
+
+Replace the IP with your phone's address. `/webrtc` serves an HTML browser player;
+giving that URL directly to go2rtc produces `magic: unsupported header: 3c21646f`
+because the response starts with `<!do` from the HTML doctype.
+
+The `/whep` endpoint uses the complete HTTP/SDP exchange supported by
+[go2rtc's WebRTC client](https://github.com/AlexxIT/go2rtc/blob/master/internal/webrtc/README.md#whep).
+It supports POST with gathered ICE candidates and DELETE at the returned session
+Location. Trickle ICE/PATCH and ICE restarts are not implemented; reconnect to
+create a new session. Optional audio in a receive-only offer stays inactive;
+RemoteCam sends only H.264 video. Existing `/webrtc`, `/view` and `/cam.mjpeg`
+addresses keep their previous roles.
+The hardware encoder is asked for a keyframe about every two seconds so that
+MP4/MSE viewers joining an existing relay stream can start decoding without
+waiting for another WebRTC receiver to request one. The bitrate limit still applies.
+
+### Direct OBS sources
+
 Open RemoteCam, grant camera access (and local network access on Android 17),
-then enable **Stream**. Copy the displayed `http://PHONE_IP:8080/view`
-address into an OBS **Browser Source**, set width/height to the camera resolution
-and custom FPS to 30. Close the previous camera source to avoid duplicate traffic.
-The compatible MJPEG endpoint remains `http://PHONE_IP:8080/cam.mjpeg`;
-for OBS Media Source, start with Network Buffering at 0 MB.
+choose a **Format**, then enable **Stream**:
+
+| Format | Address | OBS source |
+| --- | --- | --- |
+| JPEG | `http://PHONE_IP:8080/view` | Browser Source with receiver feedback |
+| JPEG | `http://PHONE_IP:8080/cam.mjpeg` | Media Source; start with Network Buffering at 0 MB |
+| H.264 + WebRTC | `http://PHONE_IP:8080/webrtc` | Browser Source |
+
+For Browser Source, set custom FPS to 30 and use dimensions matching the displayed
+image. WebRTC corrects the Camera2 texture rotation and front-camera mirror,
+then reports orientation to the receiver. With the phone upright in portrait,
+1920×1080 capture is displayed as 1080×1920: use those portrait dimensions for
+the OBS source, or keep 1920×1080 to show the entire portrait picture with side bars.
+Fit the source proportionally instead of stretching it. Set rotation in the app;
+do not apply the same rotation again in OBS. Close the previous camera source to avoid duplicate traffic. The two
+JPEG addresses carry identical JPEG image bytes; only the transport and receiver
+buffering differ. Switching to WebRTC activates its separate endpoint; JPEG mode
+retains both existing endpoints and all its original camera/quality controls.
+
+In either format, **Stream rotation** changes orientation without restarting
+the stream. **Automatic** follows display orientation. Manual angles
+are clockwise from upright portrait and ignore subsequent display rotation;
+0°/180° retain portrait framing and 90°/270° turn it sideways. This changes
+orientation, not the field of view, and does not stretch the image or rotate the
+local camera preview. The choice is saved across app restarts. WebRTC carries the
+rotation in frame metadata, which its browser receiver applies automatically.
+
+For JPEG Browser and MJPEG, the app requests Camera2 JPEG orientation and sends
+physically oriented pixels to both endpoints. If the camera rotates the pixels,
+its original JPEG is passed through. If it only supplies EXIF orientation, the
+app decodes, rotates and re-encodes at quality 100 without resizing. This fallback
+is not lossless: it can increase CPU use, bandwidth and frame time. Actual FPS
+and bandwidth are reported for the resulting frames. Both JPEG receivers still
+receive the same bytes and need no EXIF rotation support. The previous WebRTC-only
+rotation preference is migrated automatically to the shared setting.
+
 **Preview** is independent of streaming;
 **Stop** in the app or notification releases the camera and server.
-Camera, resolution, JPEG quality, Preview and Stream are saved on the phone and
+Camera, format, resolution, JPEG quality, WebRTC bitrate limit, Preview and Stream are saved on the phone and
 restored when you next open the app, including after an app update. Uninstalling
 the app or clearing its storage deletes these settings. If the saved camera or
 resolution is no longer available, RemoteCam selects a supported fallback.
+
+### Focus and zoom
+
+**Automatic** follows the scene when continuous autofocus is supported.
+**Focus & lock** performs one autofocus operation and holds its result; **Refocus**
+starts a new operation. The status distinguishes successful focus from a failed
+focus lock. Reopening the camera with this mode selected focuses again.
+
+**Manual**, when supported, starts at the reported lens position so you can hold
+the existing focus or adjust it with the far-to-near slider. Its saved position
+is restored after reopening the camera. Approximate distance labels are shown
+only for cameras reporting calibrated or approximately calibrated units;
+uncalibrated lenses show position instead. Fixed-focus cameras hide these controls.
+
+The **Zoom** slider uses the camera's supported range, with a **1×** reset. Android
+11+ uses Camera2 zoom ratio when available; older cameras use a centered sensor
+crop. Lens hardware determines whether magnification involves optical changes or
+digital cropping, and digital zoom can reduce detail. Focus and zoom apply to the
+local preview, both JPEG endpoints and WebRTC without reconnecting the receiver.
+Settings are remembered separately for each camera. If a nearby object cannot be
+brought into focus, move it farther from the lens; zoom cannot overcome the lens's
+minimum focusing distance.
 
 Validate the live stream without saving images (Python 3.9+):
 
@@ -86,12 +187,29 @@ Validate the live stream without saving images (Python 3.9+):
 python tools/check_stream.py http://PHONE_IP:8080/cam.mjpeg --frames 60 --clients 2
 ```
 
-Streaming uses unauthenticated, unencrypted HTTP/WebSocket connections; use a trusted local network.
+Use a trusted local network. JPEG and WebRTC signaling use unauthenticated,
+unencrypted HTTP/WebSocket connections. WebRTC media uses DTLS-SRTP. This first
+WebRTC implementation connects directly on the LAN, without public STUN/TURN
+servers, and carries video only; keep using your computer microphone in OBS.
 
 ### Latency and bandwidth
 
-The app currently streams **JPEG frames**, including through the `/view` browser
-receiver. H.264, H.265 and WebRTC streaming are not implemented in this version.
+**JPEG mode** streams independent JPEG frames through either `/view` or
+`/cam.mjpeg`. **H.264 + WebRTC mode** sends camera textures directly to a hardware
+H.264 encoder, without an intermediate JPEG conversion. H.265 is not implemented.
+
+WebRTC offers resolutions supported by both the selected camera and a hardware
+H.264 encoder at 30 fps. Its bitrate limit is adjustable from 2 to 40 Mb/s per
+receiver; actual bitrate adapts to conditions. The sender is configured to maintain
+resolution and may lower FPS when constrained. The limit is not a guarantee of
+constant image quality. Each receiver uses encoding resources and bandwidth;
+up to four signaling sessions are allowed, subject to device encoder capacity.
+
+WebRTC feedback shows actual video output, encoded FPS, network round-trip time
+and reported encoder limitations. These are not end-to-end latency measurements.
+Add `?stats=1` to `/webrtc` for optional browser-side codec, frame rate, bitrate
+and average jitter-buffer diagnostics. The in-app guide has separate **Formats**,
+**Bandwidth** and **OBS setup** tabs, with copy buttons for all three addresses.
 
 The displayed camera rate uses decimal **Mb/s** (megabits per second). The old
 counter was **kB/s** (kilobytes per second): 16,000 kB/s equals 128 Mb/s.
@@ -100,7 +218,7 @@ Camera production and total receiver output are displayed separately.
 JPEG quality and measured average frame size. The suggested 2× capacity is a
 planning allowance for variation, not a measured LAN speed or a guarantee.
 
-`/view` decodes the original JPEG bytes into a canvas and acknowledges each draw.
+`/view` decodes the transmitted JPEG bytes into a canvas and acknowledges each draw.
 The server permits one frame in flight and retains only the latest waiting frame
 per receiver. A slow receiver skips stale frames without changing JPEG quality or
 resolution. Green/orange/red feedback uses recent acknowledgement cycles and
@@ -118,6 +236,11 @@ in Advanced Audio Properties. Fix variable video delay before setting an offset.
 
 RemoteCam remains open source under the **[MIT License](LICENSE)**. The original
 author's copyright and license notice are preserved.
+
+The bundled [WebRTC SDK](https://github.com/webrtc-sdk/android) is version
+**150.7871.01**. Its [SDK license](app/src/main/resources/licenses/WEBRTC-SDK.txt)
+and [WebRTC/third-party notices](app/src/main/resources/licenses/WEBRTC.md) are
+included with the app and also served at `http://PHONE_IP:8080/licenses`.
 
 You are welcome to download, use, modify and share the project under those terms.
 This fork remains free, without ads, subscriptions or paid feature unlocks.

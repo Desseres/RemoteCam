@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical">
-    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp"
+    <FrameLayout android:id="@+id/preview_container" android:layout_width="match_parent" android:layout_height="0dp"
         android:layout_weight="1" android:background="#000000">
-        <com.example.android.camera.utils.AutoFitSurfaceView android:id="@+id/view_finder"
-            android:layout_width="match_parent" android:layout_height="match_parent"
+        <org.webrtc.SurfaceViewRenderer android:id="@+id/view_finder"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:layout_gravity="center" />
     </FrameLayout>
     <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
@@ -28,6 +29,10 @@
                     android:text="@string/stream" />
             </LinearLayout>
             <LinearLayout style="@style/ControlRow">
+                <TextView style="@style/ControlLabel" android:text="@string/stream_mode" android:labelFor="@id/spinner_mode" />
+                <Spinner android:id="@+id/spinner_mode" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" />
+            </LinearLayout>
+            <LinearLayout style="@style/ControlRow">
                 <TextView style="@style/ControlLabel" android:text="@string/sensor" android:labelFor="@id/spinnerCam" />
                 <Spinner android:id="@+id/spinnerCam" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" />
             </LinearLayout>
@@ -35,19 +40,52 @@
                 <TextView style="@style/ControlLabel" android:text="@string/resolution" android:labelFor="@id/spinnerRes" />
                 <Spinner android:id="@+id/spinnerRes" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" />
             </LinearLayout>
+            <LinearLayout android:id="@+id/focus_row" style="@style/ControlRow">
+                <TextView style="@style/ControlLabel" android:text="@string/focus_label" android:labelFor="@id/spinner_focus" />
+                <Spinner android:id="@+id/spinner_focus" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" />
+                <Button android:id="@+id/button_refocus" android:layout_width="wrap_content" android:layout_height="48dp"
+                    android:text="@string/refocus" android:textAllCaps="false" android:textSize="12sp" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/manual_focus_panel" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="vertical" android:visibility="gone">
+                <TextView android:id="@+id/manual_focus_value" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:labelFor="@id/seek_focus" android:text="@string/focus_distance_control" android:textSize="14sp" />
+                <SeekBar android:id="@+id/seek_focus" android:layout_width="match_parent" android:layout_height="48dp"
+                    android:max="1000" android:contentDescription="@string/focus_distance_control" />
+            </LinearLayout>
+            <TextView android:id="@+id/focus_status" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textSize="12sp" android:paddingBottom="8dp" />
             <LinearLayout style="@style/ControlRow">
+                <TextView style="@style/ControlLabel" android:text="@string/zoom_label" android:labelFor="@id/seek_zoom" />
+                <TextView android:id="@+id/zoom_value" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" />
+                <Button android:id="@+id/button_reset_zoom" android:layout_width="wrap_content" android:layout_height="48dp"
+                    android:text="@string/zoom_reset" android:textAllCaps="false" android:textSize="12sp" />
+            </LinearLayout>
+            <SeekBar android:id="@+id/seek_zoom" android:layout_width="match_parent" android:layout_height="48dp"
+                android:max="1000" android:contentDescription="@string/zoom_label" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/zoom_hint"
+                android:textSize="12sp" android:paddingBottom="8dp" />
+            <LinearLayout android:id="@+id/jpeg_quality_row" style="@style/ControlRow">
                 <TextView style="@style/ControlLabel" android:text="@string/quality" android:labelFor="@id/spinnerQua" />
                 <Spinner android:id="@+id/spinnerQua" android:layout_width="0dp"
                     android:layout_height="48dp" android:layout_weight="1" />
-                <TextView android:id="@+id/qual_feedback" android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" android:textSize="12sp" />
             </LinearLayout>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            <LinearLayout android:id="@+id/rtc_bitrate_row" style="@style/ControlRow" android:visibility="gone">
+                <TextView style="@style/ControlLabel" android:text="@string/bitrate_limit" android:labelFor="@id/spinner_bitrate" />
+                <Spinner android:id="@+id/spinner_bitrate" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" />
+            </LinearLayout>
+            <LinearLayout android:id="@+id/rtc_rotation_row" style="@style/ControlRow">
+                <TextView style="@style/ControlLabel" android:text="@string/rotation_label" android:labelFor="@id/spinner_rotation" />
+                <Spinner android:id="@+id/spinner_rotation" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" />
+            </LinearLayout>
+            <TextView android:id="@+id/rtc_rotation_hint" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="@string/rotation_hint" android:textSize="12sp" />
+            <TextView android:id="@+id/qual_feedback" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:textSize="22sp" android:paddingTop="8dp" />
+            <TextView android:id="@+id/rate_hint" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="@string/generated_rate_hint" android:textSize="12sp" />
             <TextView android:id="@+id/transfer_feedback" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:textSize="12sp" android:paddingTop="4dp" />
-            <Button android:id="@+id/button_bandwidth" android:layout_width="match_parent"
-                android:layout_height="48dp" android:text="@string/bandwidth_title" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="@string/stream_address" android:paddingTop="8dp" />
             <TextView android:id="@+id/textView6" android:layout_width="match_parent"
@@ -55,10 +93,31 @@
                 android:textSize="14sp" android:textColor="@color/colorPrimary"
                 android:contentDescription="@string/copy_address" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="@string/local_network_notice" android:textSize="12sp" />
+                android:text="@string/mjpeg_address_label" android:paddingTop="8dp" />
+            <TextView android:id="@+id/mjpeg_address" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:minHeight="48dp" android:gravity="center_vertical" android:textSize="14sp" android:textColor="@color/colorPrimary" />
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="@string/project_url" android:autoLink="web" android:paddingTop="8dp"
-                android:textSize="12sp" />
+                android:text="@string/rtc_address_label" android:paddingTop="8dp" />
+            <TextView android:id="@+id/rtc_address" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:minHeight="48dp" android:gravity="center_vertical" android:textSize="14sp" android:textColor="@color/colorPrimary" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/go2rtc_address_label" android:paddingTop="8dp" />
+            <TextView android:id="@+id/go2rtc_address" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:minHeight="48dp" android:gravity="center_vertical" android:textSize="14sp" android:textColor="@color/colorPrimary" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/address_mode_hint" android:textSize="12sp" android:paddingBottom="8dp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/local_network_notice" android:textSize="12sp" />
+            <!-- Keep filled action buttons consistent with Stop, Refocus and zoom reset. -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                tools:ignore="ButtonStyle" android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="12dp">
+                <Button android:id="@+id/button_bandwidth" android:layout_width="0dp"
+                    android:layout_height="wrap_content" android:minHeight="56dp" android:layout_weight="3"
+                    android:layout_marginEnd="8dp" android:text="@string/bandwidth_title" android:textAllCaps="false" android:textSize="14sp" />
+                <Button android:id="@+id/button_info" android:layout_width="0dp"
+                    android:layout_height="wrap_content" android:minHeight="56dp" android:layout_weight="1"
+                    android:text="@string/info" android:textAllCaps="false" android:textSize="14sp" />
+            </LinearLayout>
         </LinearLayout>
     </ScrollView>
 </LinearLayout>

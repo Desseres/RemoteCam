@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RemoteCam • H.264 WebRTC</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#edf2f8;font:16px system-ui}
+video{width:100%;height:100%;object-fit:contain;display:block}
+#status{position:absolute;inset:0;display:grid;place-content:center;text-align:center;gap:12px;padding:32px;background:#10151d}
+#status[hidden],#stats[hidden]{display:none}h1{font-size:24px;margin:0}p{max-width:560px;line-height:1.6;color:#b8c4d5}
+#stats{position:absolute;bottom:12px;left:12px;padding:10px 14px;border-radius:8px;background:#10151de6;font:13px monospace;white-space:pre-line}
+</style></head><body>
+<video id="video" autoplay playsinline muted></video>
+<div id="status" role="status"><h1>RemoteCam · H.264</h1><p id="message">Connecting to the phone…</p></div>
+<output id="stats" hidden></output>
+<script>
+'use strict';
+const video = document.getElementById('video');
+const status = document.getElementById('status');
+const message = document.getElementById('message');
+const stats = document.getElementById('stats');
+stats.hidden = !new URLSearchParams(location.search).has('stats');
+let active, retry, stopped = false;
+function connect() {
+    if (stopped) return;
+    const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/signal');
+    const pc = new RTCPeerConnection({iceServers: []});
+    const current = {ws, pc, pending: [], localIce: [], offerSent: false, timer: null, bytes: 0, time: 0, frames: 0, lastFrame: performance.now()};
+    active = current;
+    let explanation = 'Select H.264 + WebRTC and enable Stream on the phone. Reconnecting…';
+    const incoming = pc.addTransceiver('video', {direction: 'recvonly'});
+    const h264 = RTCRtpReceiver.getCapabilities('video')?.codecs.filter(c => c.mimeType.toLowerCase() === 'video/h264') || [];
+    if (h264.length && incoming.setCodecPreferences) incoming.setCodecPreferences(h264);
+    function send(text) { if (ws.readyState === WebSocket.OPEN) ws.send(text); }
+    pc.onicecandidate = ({candidate: c}) => {
+        if (!c) return;
+        const signal = 'ice\n' + (c.sdpMid ?? '') + '\n' + c.sdpMLineIndex + '\n' + c.candidate;
+        if (current.offerSent) send(signal); else current.localIce.push(signal);
+    };
+    pc.ontrack = event => { video.srcObject = event.streams[0] || new MediaStream([event.track]); video.play().catch(() => {}); };
+    video.onplaying = () => { if (active === current) status.hidden = true; };
+    pc.onconnectionstatechange = () => {
+        if (active !== current) return;
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') ws.close();
+        if (pc.connectionState === 'disconnected') { status.hidden = false; message.textContent = 'Connection interrupted. Reconnecting…'; ws.close(); }
+    };
+    ws.onopen = async () => {
+        try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            send('offer\n' + offer.sdp);
+            current.offerSent = true;
+            current.localIce.forEach(send); current.localIce = [];
+        } catch (error) { explanation = error.message; ws.close(); }
+    };
+    let chain = Promise.resolve();
+    ws.onmessage = event => {
+        chain = chain.then(async () => {
+            if (active !== current) return;
+            const text = event.data;
+            if (text.startsWith('answer\n')) {
+                await pc.setRemoteDescription({type:'answer', sdp:text.slice(7)});
+                for (const c of current.pending) await pc.addIceCandidate(c);
+                current.pending = [];
+            } else if (text.startsWith('ice\n')) {
+                const parts = text.split('\n');
+                const c = {sdpMid:parts[1], sdpMLineIndex:Number(parts[2]), candidate:parts.slice(3).join('\n')};
+                if (pc.remoteDescription) await pc.addIceCandidate(c); else current.pending.push(c);
+            } else if (text.startsWith('error\n') || text.startsWith('reset\n')) {
+                explanation = text.slice(text.indexOf('\n') + 1); ws.close();
+            }
+        }).catch(error => { explanation = error.message; ws.close(); });
+    };
+    ws.onerror = () => ws.close();
+    ws.onclose = () => {
+        clearInterval(current.timer); pc.close();
+        if (active !== current) return;
+        video.srcObject = null; status.hidden = false; message.textContent = explanation;
+        retry = setTimeout(connect, 1500);
+    };
+    // DOM diagnostics are optional and do not affect media flow or acknowledge playback.
+    current.timer = setInterval(async () => {
+        if (active !== current) return;
+        if (performance.now() - current.lastFrame > 15000) { explanation = 'No video received. Check the selected format, resolution and local network. Reconnecting…'; ws.close(); return; }
+        if (pc.connectionState !== 'connected') return;
+        try {
+        const report = await pc.getStats();
+        report.forEach(item => {
+            if (item.type !== 'inbound-rtp' || item.kind !== 'video') return;
+            const codec = report.get(item.codecId)?.mimeType || 'unknown';
+            const rate = current.time ? (item.bytesReceived - current.bytes) * 8 / (item.timestamp - current.time) / 1000 : 0;
+            current.bytes = item.bytesReceived; current.time = item.timestamp;
+            if (item.framesDecoded > current.frames) { current.lastFrame = performance.now(); current.frames = item.framesDecoded; }
+            const jitter = item.jitterBufferEmittedCount ? item.jitterBufferDelay / item.jitterBufferEmittedCount * 1000 : 0;
+            video.dataset.codec = codec;
+            video.dataset.frames = String(item.framesDecoded || 0);
+            video.dataset.fps = String(item.framesPerSecond || 0);
+            video.dataset.mbps = rate.toFixed(2);
+            video.dataset.jitterMs = jitter.toFixed(1);
+            stats.textContent = `${codec} · ${video.videoWidth}×${video.videoHeight}\n${item.framesPerSecond || 0} fps · ${rate.toFixed(1)} Mb/s · buffer avg ${jitter.toFixed(1)} ms`;
+        });
+        } catch (error) { if (active === current) { explanation = error.message; ws.close(); } }
+    }, 1000);
+}
+window.addEventListener('pagehide', () => { stopped = true; clearTimeout(retry); const old = active; active = null; if (old) { clearInterval(old.timer); old.ws.close(); old.pc.close(); } });
+connect();
+</script></body></html>

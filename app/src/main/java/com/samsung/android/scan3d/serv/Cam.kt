@@ -56,6 +56,17 @@ class Cam : Service() {
         return START_NOT_STICKY
     }
 
+    override fun dump(fd: java.io.FileDescriptor?, writer: java.io.PrintWriter?, args: Array<out String>?) {
+        if (!::engine.isInitialized) return
+        val state = engine.status.value
+        // Local ADB diagnostics: verify camera-reported values, not only requested settings.
+        writer?.println("config=${state.config}")
+        writer?.println("controls=${state.controls}")
+        writer?.println("focusState=${state.focusState} focusDistance=${state.focusDistance} actualZoom=${state.actualZoom} fps=${state.fps}")
+        writer?.println("error=${state.error}")
+        writer?.println("captureGeneration=${state.captureGeneration} capturedFrames=${engine.capturedFrames} rtc=${state.rtc}")
+    }
+
     override fun onDestroy() {
         engine.destroy()
         stopForeground(STOP_FOREGROUND_REMOVE)
