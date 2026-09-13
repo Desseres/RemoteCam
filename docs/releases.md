@@ -4,6 +4,12 @@ APK przeznaczone do pobierania powinno pochodzić z wariantu **release** i być
 podpisane stałym, prywatnym kluczem wydawcy. Gradle nie używa automatycznie klucza
 debug do release. Skrypt poniżej podpisuje APK dopiero po jego zbudowaniu.
 
+## Opisy wersji
+
+- [0.3.2 — dźwięk z mikrofonu przez WebRTC](releases/v0.3.2.md): zmiany,
+  konfiguracja OBS i go2rtc, zgodność, wyniki testów oraz pliki do pobrania.
+- [0.3.0 — modernizacja aplikacji i transmisji](releases/v0.3.0.md).
+
 ## Klucz wydawcy — jednorazowo
 
 W PowerShell na Windows:

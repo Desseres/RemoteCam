@@ -58,6 +58,10 @@ object AboutDialog {
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12); height = dp(48) })
         card(R.string.about_free_title, R.string.about_free_body)
         card(R.string.about_update_title, R.string.about_update_body)
+        body.addView(Button(context).apply {
+            setText(R.string.privacy_policy); isAllCaps = false
+            setOnClickListener { showPrivacy(context) }
+        }, LinearLayout.LayoutParams(-1, dp(48)))
         root.addView(Button(context).apply {
             setText(R.string.close); isAllCaps = false; setTextColor(background); this.background = shape(accent)
             setOnClickListener { dialog.dismiss() }
@@ -70,5 +74,21 @@ object AboutDialog {
         val metrics = context.resources.displayMetrics
         dialog.window?.setLayout(minOf((metrics.widthPixels * 0.94).toInt(), dp(640)),
             minOf((metrics.heightPixels * 0.84).toInt(), dp(620)))
+    }
+
+    private fun showPrivacy(context: Context) {
+        val padding = (20 * context.resources.displayMetrics.density).toInt()
+        val policy = checkNotNull(javaClass.getResourceAsStream("/privacy-policy.txt"))
+            .bufferedReader().use { it.readText() }
+        val text = TextView(context).apply {
+            this.text = policy; textSize = 16f
+            setPadding(padding, padding, padding, padding)
+            setTextIsSelectable(true)
+            android.text.util.Linkify.addLinks(this, android.text.util.Linkify.EMAIL_ADDRESSES)
+        }
+        androidx.appcompat.app.AlertDialog.Builder(context)
+            .setTitle(R.string.privacy_policy)
+            .setView(ScrollView(context).apply { addView(text) })
+            .setPositiveButton(R.string.close, null).show()
     }
 }

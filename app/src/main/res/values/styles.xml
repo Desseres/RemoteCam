@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <color name="launch_background">#151515</color>
+    <style name="AppTheme.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/launch_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_camera_mark</item>
+        <item name="postSplashScreenTheme">@style/AppTheme</item>
+    </style>
     <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:navigationBarColor">@color/launch_background</item>
         <item name="android:windowBackground">#151515</item>
         <item name="fontFamily">sans</item>
         <item name="colorPrimary">@color/colorPrimary</item>

@@ -41,25 +41,11 @@ class WhepSessions {
     companion object {
         const val MAX_OFFER_BYTES = 131072
         fun validateOffer(offer: String) {
-            require(offer.length <= MAX_OFFER_BYTES && offer.startsWith("v=0\r\n")) { "Invalid SDP offer" }
-            val sections = offer.split("\r\nm=")
-            val sessionDirection = sections.first().lineSequence().firstOrNull { it in directions }
-            val media = sections.drop(1)
-            require(media.count { it.startsWith("video ") } == 1 &&
-                media.count { it.startsWith("audio ") } <= 1 &&
-                media.all { it.startsWith("video ") || it.startsWith("audio ") }) {
-                "Offer must contain one video track and at most one optional audio track"
-            }
-            media.forEach { section ->
-                val direction = section.lineSequence().firstOrNull { it in directions } ?: sessionDirection
-                require(direction == "a=recvonly" || (section.startsWith("audio ") && direction == "a=inactive")) {
-                    "Only receive-only clients are supported; RemoteCam sends video only"
-                }
-            }
+            ReceiveOffer.validate(offer)
             require(offer.lineSequence().any { it.startsWith("a=candidate:") }) {
                 "Include gathered ICE candidates in the offer; trickle ICE is not supported on this endpoint"
             }
         }
-        private val directions = setOf("a=sendrecv", "a=sendonly", "a=recvonly", "a=inactive")
+
     }
 }

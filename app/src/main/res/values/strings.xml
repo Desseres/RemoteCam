@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="audio_enable">Microphone audio (WebRTC)</string>
+    <string name="audio_mute">Mute microphone</string>
+    <string name="audio_hint">Opus audio from this phone. Enabling or disabling audio reconnects receivers; mute keeps video running. In OBS, enable Control audio via OBS. JPEG/MJPEG remain video only.</string>
+    <string name="audio_permission_denied">Microphone permission was not granted. Video remains available. You can grant microphone access in Android app settings.</string>
+    <string name="audio_off">Microphone off</string>
+    <string name="audio_waiting">Audio enabled — waiting for Stream and an audio receiver</string>
+    <string name="audio_live">Microphone audio is being captured</string>
+    <string name="audio_muted">Microphone muted — receivers receive silence</string>
+    <string name="notification_audio_text">Camera and microphone controls — open to mute or stop</string>
     <string name="app_name" translatable="false">RemoteCam</string>
     <string name="stop">Stop</string>
     <string name="preview">Preview</string>
@@ -19,7 +28,7 @@
     <string name="address_mode_hint">JPEG enables the JPEG Browser and MJPEG addresses. H.264 + WebRTC enables OBS Browser and go2rtc. Both JPEG addresses carry identical image bytes.</string>
     <string name="go2rtc_address_label">H.264 · go2rtc source · tap to copy</string>
     <string name="guide_go2rtc_title">go2rtc · H.264 without a browser</string>
-    <string name="guide_go2rtc_body">For go2rtc, copy the go2rtc source address from the main screen into your stream configuration. Keep the webrtc: prefix and /whep path. /webrtc is an HTML player, not a direct media source. Video remains H.264; this connection method does not re-encode it or add audio.</string>
+    <string name="guide_go2rtc_body">For go2rtc, copy the go2rtc source address from the main screen into your stream configuration. Keep the webrtc: prefix and /whep path. /webrtc is an HTML player, not a direct media source. Video remains H.264; optional phone microphone audio uses Opus. Reconnect the source after enabling or disabling audio.</string>
     <string name="rtc_rate_hint">H.264 video sent to all receivers. Bitrate adapts up to your per-receiver limit.</string>
     <string name="rtc_summary">WebRTC · connected: %1$d / %2$d\nEncoded: %3$.0f fps · %4$s\n%5$s</string>
     <string name="rtc_rtt">Network round trip: %1$.0f ms</string>
@@ -116,7 +125,7 @@
     <string name="guide_network_title">Use your local network well</string>
     <string name="guide_network_body">Prefer Ethernet for the PC and strong 5/6 GHz Wi-Fi or a wired connection for the phone. Internet upload speed is not LAN capacity. WebRTC connects directly on the LAN without a public STUN/TURN server; network isolation can prevent connection.</string>
     <string name="guide_audio_title">Match picture and microphone</string>
-    <string name="guide_audio_body">Record a clap test in OBS. If sound is consistently ahead of the image, delay that microphone by the measured difference using Advanced Audio Properties → Sync Offset. For example, audio 150 ms early needs +150 ms. Fix changing video delay before choosing an offset.</string>
+    <string name="guide_audio_body">WebRTC can send the phone microphone with video. Enable Microphone audio, grant permission, and enable Control audio via OBS in the Browser Source. A browser may require clicking Enable sound. Mute sends silence without restarting video; disabling audio releases capture and reconnects receivers. For a separate PC microphone, record a clap test in OBS. If audio is 150 ms early, apply +150 ms in Advanced Audio Properties → Sync Offset. Fix changing video delay before choosing an offset.</string>
     <string name="bandwidth_current">%1$d×%2$d · JPEG quality %3$d\nAverage JPEG: %4$.0f kB · captured: %5$d fps\nMeasured JPEG production: %6$.1f Mb/s</string>
     <string name="bandwidth_wait">Enable Preview or Stream and wait for camera measurements.</string>
     <string name="bandwidth_fps">FPS</string>
@@ -137,4 +146,6 @@
     <string name="rotation_option">%1$d° clockwise</string>
     <string name="rotation_hint">WebRTC rotation: manual angles start from upright portrait and stay fixed when you turn the phone. Applies immediately to receivers; the local camera preview is unchanged.</string>
     <string name="rotation_jpeg_hint">Rotation applies to both JPEG Browser and MJPEG. Manual angles start from upright portrait. The camera rotates the JPEG; if it only writes EXIF, the app rotates and re-encodes at quality 100 for compatible playback. That fallback can increase CPU use and bandwidth. Local preview is unchanged.</string>
+    <string name="launch_tagline">Your phone. Your camera. Your stream.</string>
+    <string name="privacy_policy">Privacy policy</string>
 </resources>

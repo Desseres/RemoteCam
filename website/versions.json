@@ -1,0 +1,24 @@
+[
+  {
+    "version": "0.3.2",
+    "date": "2026-09-12",
+    "applicationId": "pl.remotecam.app",
+    "apk": "downloads/RemoteCam-pl.remotecam.app-0.3.2.apk",
+    "title": {"pl": "Teraz także z dźwiękiem.", "en": "Now with audio, too."},
+    "description": {"pl": "Opcjonalny mikrofon telefonu w WebRTC, kodowanie Opus i odbiór przez OBS oraz go2rtc. Wyciszanie bez przerywania obrazu, zapamiętywanie ustawień audio i zaktualizowana polityka prywatności. JPEG i MJPEG nadal przesyłają sam obraz.", "en": "Optional phone microphone audio over WebRTC, Opus encoding and playback through OBS and go2rtc. Mute without interrupting video, saved audio settings and an updated privacy policy. JPEG and MJPEG remain video only."}
+  },
+  {
+    "version": "0.3.1",
+    "date": "2026-09-11",
+    "applicationId": "pl.remotecam.app",
+    "apk": "downloads/RemoteCam-pl.remotecam.app-0.3.1.apk",
+    "title": {"pl": "Własna tożsamość. Ten sam cel.", "en": "A new identity. The same purpose."},
+    "description": {"pl": "Nowy identyfikator pl.remotecam.app, odświeżona ikona, ilustrowany ekran startowy i polityka prywatności dostępna w aplikacji.", "en": "New pl.remotecam.app application ID, a refreshed icon, an illustrated launch screen and an in-app privacy policy."}
+  },
+  {
+    "version": "0.3.0",
+    "date": "2026-09-11",
+    "title": {"pl": "Więcej kontroli nad transmisją", "en": "More control over your stream"},
+    "description": {"pl": "H.264 i WebRTC, integracja go2rtc, poprawione proporcje i obrót, sterowanie ostrością oraz zoomem i zapisywanie konfiguracji.", "en": "H.264 and WebRTC, go2rtc integration, corrected aspect ratios and rotation, focus and zoom controls, and saved settings."}
+  }
+]

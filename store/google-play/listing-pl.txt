@@ -1,0 +1,42 @@
+TYTUŁ
+RemoteCam
+
+KRÓTKI OPIS
+Zamień telefon w kamerę do OBS. Obraz przez Wi-Fi, bez reklam i subskrypcji.
+
+PEŁNY OPIS
+Zamień telefon z Androidem w kamerę do komputera. RemoteCam przesyła obraz przez sieć lokalną do OBS, przeglądarki lub zgodnego odbiornika. Ustaw telefon na statywie, wybierz kamerę i dopasuj kadr do swojej transmisji.
+
+WYBIERZ SPOSÓB ODBIORU
+• H.264 + WebRTC: sprzętowe kodowanie wideo i regulowany limit bitrate. Odbiór w OBS Browser lub przez wejście WHEP w go2rtc.
+• JPEG Browser: obraz w źródle przeglądarkowym OBS i sterowanie jakością JPEG.
+• MJPEG: strumień klatek JPEG dla zgodnych odtwarzaczy i narzędzi.
+
+USTAW KAMERĘ
+Wybieraj spośród kamer i rozdzielczości udostępnianych przez telefon. Sprawdzaj proporcje obrazu przy rozdzielczościach. Ustaw automatyczny lub ręczny obrót transmisji. Korzystaj z zoomu, autofokusa, blokady ostrości lub ostrości ręcznej, jeśli obsługuje je dana kamera. Zakresy i dostępność funkcji zależą od urządzenia.
+
+ZACHOWAJ SWOJĄ KONFIGURACJĘ
+RemoteCam zapamiętuje kamerę, rozdzielczość, format, jakość, limit bitrate, obrót, podgląd i ustawienia ostrości oraz zoomu. Zapamiętuje także przełącznik Stream: po ponownym otwarciu aplikacji wcześniej włączona transmisja zostaje wznowiona.
+
+PODGLĄD I TRANSMISJA
+Ukrywaj lokalny podgląd bez restartowania kamery. Otrzymasz więcej miejsca na ustawienia. Transmisja może działać w tle, a powiadomienie pozwala wrócić do aplikacji lub zatrzymać kamerę.
+
+POMOC POD RĘKĄ
+W aplikacji znajdziesz adresy odbioru, informacje o przepływności oraz wskazówki dotyczące formatów, opóźnienia, przepustowości i konfiguracji OBS. Płynność oraz opóźnienie zależą od telefonu, sieci i ustawień odbiornika.
+
+JAK ZACZĄĆ
+1. Połącz telefon i komputer z tą samą zaufaną siecią lokalną.
+2. Otwórz RemoteCam, udziel wymaganych uprawnień i wybierz format.
+3. Włącz Stream i otwórz odpowiedni adres w odbiorniku.
+
+WAŻNE INFORMACJE
+Aplikacja przesyła obraz bez dźwięku. Mikrofon komputera dodaj osobno w OBS. H.264 wymaga zgodnego enkodera sprzętowego. Wymagany Android 9 lub nowszy. Interfejs aplikacji jest w języku angielskim.
+
+Używaj zaufanej sieci prywatnej. Odbiorniki nie wymagają hasła ani parowania. JPEG, MJPEG i sygnalizacja połączeń korzystają z nieszyfrowanego HTTP; media WebRTC korzystają z DTLS-SRTP. Nie wystawiaj portu telefonu do internetu.
+
+RemoteCam jest bezpłatnym projektem open source na licencji MIT. Nie ma reklam, subskrypcji, zakupów w aplikacji ani kont użytkowników. Dziękujemy Thomasowi SIMONOWI / Ruddle za oryginalny projekt i inspirację.
+
+Strona: https://remotecam.kasztelan.me/
+Projekt: https://github.com/Desseres/RemoteCam
+Wsparcie: apps@kasztelan.me
+RemoteCam nie jest oficjalną aplikacją Samsung, OBS ani go2rtc.

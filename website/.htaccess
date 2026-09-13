@@ -1,0 +1,10 @@
+DirectoryIndex index.php
+Options -Indexes
+# Preserve the PHP 8.4 handler configured for remotecam.kasztelan.me.
+AddHandler application/x-httpd-php84 php
+<IfModule mod_mime.c>
+  AddType application/vnd.android.package-archive .apk
+</IfModule>
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+</IfModule>

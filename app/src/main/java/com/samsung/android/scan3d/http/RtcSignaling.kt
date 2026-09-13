@@ -9,9 +9,7 @@ sealed interface RtcSignal {
             require(text.length <= 131072) { "Signaling message too large" }
             if (text.startsWith("offer\n")) {
                 val sdp = text.substringAfter('\n')
-                require(sdp.startsWith("v=0") && sdp.contains("m=video ")) { "A video offer is required" }
-                val media = sdp.lineSequence().filter { it.startsWith("m=") }.toList()
-                require(media.size == 1 && media[0].startsWith("m=video ") && sdp.lineSequence().any { it.trim() == "a=recvonly" }) { "Only a single receive-only video track is supported" }
+                ReceiveOffer.validate(sdp)
                 return Offer(sdp)
             }
             val parts = text.split('\n', limit = 4)

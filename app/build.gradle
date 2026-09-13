@@ -3,11 +3,11 @@ android {
     namespace = 'com.samsung.android.scan3d'
     compileSdk { version = release(37) }
     defaultConfig {
-        applicationId = 'com.samsung.android.scan3d'
+        applicationId = 'pl.remotecam.app'
         minSdk = 28
         targetSdk = 37
-        versionCode = 15
-        versionName = '0.3.0'
+        versionCode = 17
+        versionName = '0.3.2'
         testInstrumentationRunner = 'com.samsung.android.scan3d.JpegRotationInstrumentation'
     }
     compileOptions {
@@ -26,6 +26,7 @@ android {
 dependencies {
     implementation project(':utils')
     implementation 'androidx.core:core-ktx:1.19.0'
+    implementation 'androidx.core:core-splashscreen:1.2.0'
     implementation 'androidx.appcompat:appcompat:1.8.0'
     implementation 'androidx.exifinterface:exifinterface:1.4.2'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.11.0'

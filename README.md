@@ -11,6 +11,13 @@ In a world full of ads, subscriptions and paywalls, we want this project to
 remain freely available to everyone. Download the source, build it, use it and
 make it your own. Contributions and improvements are welcome.
 
+Google Play preparation (listing, graphics, privacy policy and submission checklist):
+[Play Console publication pack](store/google-play/PLAY-CONSOLE.md).
+This is a preparation package; the app has not been published to Google Play.
+
+Website sources and the hosting update script are in `website/` and
+`scripts/publish-site.ps1`. See the [website deployment guide](docs/website.md).
+
 ## Thanks to the original author
 
 Thank you to **Thomas SIMON ([Ruddle](https://github.com/Ruddle))**, the author of
@@ -106,8 +113,9 @@ The `/whep` endpoint uses the complete HTTP/SDP exchange supported by
 [go2rtc's WebRTC client](https://github.com/AlexxIT/go2rtc/blob/master/internal/webrtc/README.md#whep).
 It supports POST with gathered ICE candidates and DELETE at the returned session
 Location. Trickle ICE/PATCH and ICE restarts are not implemented; reconnect to
-create a new session. Optional audio in a receive-only offer stays inactive;
-RemoteCam sends only H.264 video. Existing `/webrtc`, `/view` and `/cam.mjpeg`
+create a new session. Starting with 0.3.2, optional receive-only audio offers receive
+Opus when Microphone audio is enabled on the phone; otherwise audio stays inactive.
+Existing `/webrtc`, `/view` and `/cam.mjpeg`
 addresses keep their previous roles.
 The hardware encoder is asked for a keyframe about every two seconds so that
 MP4/MSE viewers joining an existing relay stream can start decoding without
@@ -190,7 +198,9 @@ python tools/check_stream.py http://PHONE_IP:8080/cam.mjpeg --frames 60 --client
 Use a trusted local network. JPEG and WebRTC signaling use unauthenticated,
 unencrypted HTTP/WebSocket connections. WebRTC media uses DTLS-SRTP. This first
 WebRTC implementation connects directly on the LAN, without public STUN/TURN
-servers, and carries video only; keep using your computer microphone in OBS.
+servers. Version 0.3.2 adds optional phone microphone audio over WebRTC; JPEG/MJPEG
+remain video only. See [WebRTC audio](docs/webrtc-audio.md) for permissions, mute,
+OBS/go2rtc setup and testing. A separate PC microphone still needs its own OBS sync offset.
 
 ### Latency and bandwidth
 

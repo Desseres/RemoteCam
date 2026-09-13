@@ -7,26 +7,41 @@ video{width:100%;height:100%;object-fit:contain;display:block}
 #status{position:absolute;inset:0;display:grid;place-content:center;text-align:center;gap:12px;padding:32px;background:#10151d}
 #status[hidden],#stats[hidden]{display:none}h1{font-size:24px;margin:0}p{max-width:560px;line-height:1.6;color:#b8c4d5}
 #stats{position:absolute;bottom:12px;left:12px;padding:10px 14px;border-radius:8px;background:#10151de6;font:13px monospace;white-space:pre-line}
+#sound{position:absolute;right:16px;bottom:16px;background:#343434;color:#fff;border:1px solid #777;padding:12px 18px;font:inherit;cursor:pointer}
+#sound[hidden]{display:none}
 </style></head><body>
 <video id="video" autoplay playsinline muted></video>
 <div id="status" role="status"><h1>RemoteCam · H.264</h1><p id="message">Connecting to the phone…</p></div>
 <output id="stats" hidden></output>
+<button id="sound" type="button" hidden>Enable sound</button>
 <script>
 'use strict';
 const video = document.getElementById('video');
 const status = document.getElementById('status');
 const message = document.getElementById('message');
 const stats = document.getElementById('stats');
+const sound = document.getElementById('sound');
+const startMuted = new URLSearchParams(location.search).get('muted') === '1';
+let soundAllowed = !startMuted;
+sound.onclick = async () => {
+    soundAllowed = true;
+    video.muted = false;
+    try { await video.play(); sound.hidden = true; }
+    catch (_) { video.muted = true; sound.hidden = false; }
+};
 stats.hidden = !new URLSearchParams(location.search).has('stats');
 let active, retry, stopped = false;
 function connect() {
     if (stopped) return;
     const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/signal');
     const pc = new RTCPeerConnection({iceServers: []});
-    const current = {ws, pc, pending: [], localIce: [], offerSent: false, timer: null, bytes: 0, time: 0, frames: 0, lastFrame: performance.now()};
+    const current = {ws, pc, stream: new MediaStream(), pending: [], localIce: [], offerSent: false, timer: null, bytes: 0, time: 0, frames: 0, lastFrame: performance.now()};
     active = current;
     let explanation = 'Select H.264 + WebRTC and enable Stream on the phone. Reconnecting…';
     const incoming = pc.addTransceiver('video', {direction: 'recvonly'});
+    const audio = pc.addTransceiver('audio', {direction: 'recvonly'});
+    const opus = RTCRtpReceiver.getCapabilities('audio')?.codecs.filter(c => c.mimeType.toLowerCase() === 'audio/opus') || [];
+    if (opus.length && audio.setCodecPreferences) audio.setCodecPreferences(opus);
     const h264 = RTCRtpReceiver.getCapabilities('video')?.codecs.filter(c => c.mimeType.toLowerCase() === 'video/h264') || [];
     if (h264.length && incoming.setCodecPreferences) incoming.setCodecPreferences(h264);
     function send(text) { if (ws.readyState === WebSocket.OPEN) ws.send(text); }
@@ -35,7 +50,22 @@ function connect() {
         const signal = 'ice\n' + (c.sdpMid ?? '') + '\n' + c.sdpMLineIndex + '\n' + c.candidate;
         if (current.offerSent) send(signal); else current.localIce.push(signal);
     };
-    pc.ontrack = event => { video.srcObject = event.streams[0] || new MediaStream([event.track]); video.play().catch(() => {}); };
+    pc.ontrack = async event => {
+        if (active !== current) return;
+        current.stream.addTrack(event.track);
+        if (video.srcObject !== current.stream) video.srcObject = current.stream;
+        const hasAudio = current.stream.getAudioTracks().length > 0;
+        video.muted = !hasAudio || !soundAllowed;
+        sound.hidden = !hasAudio || soundAllowed;
+        try { await video.play(); }
+        catch (_) {
+            if (active !== current) return;
+            // Autoplay policy must never prevent the video from appearing.
+            video.muted = true;
+            sound.hidden = !hasAudio;
+            video.play().catch(() => {});
+        }
+    };
     video.onplaying = () => { if (active === current) status.hidden = true; };
     pc.onconnectionstatechange = () => {
         if (active !== current) return;
@@ -73,7 +103,7 @@ function connect() {
     ws.onclose = () => {
         clearInterval(current.timer); pc.close();
         if (active !== current) return;
-        video.srcObject = null; status.hidden = false; message.textContent = explanation;
+        video.srcObject = null; sound.hidden = true; status.hidden = false; message.textContent = explanation;
         retry = setTimeout(connect, 1500);
     };
     // DOM diagnostics are optional and do not affect media flow or acknowledge playback.

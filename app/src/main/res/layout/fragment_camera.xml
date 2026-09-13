@@ -78,6 +78,17 @@
                 <TextView style="@style/ControlLabel" android:text="@string/rotation_label" android:labelFor="@id/spinner_rotation" />
                 <Spinner android:id="@+id/spinner_rotation" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" />
             </LinearLayout>
+            <LinearLayout android:id="@+id/rtc_audio_panel" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <androidx.appcompat.widget.SwitchCompat android:id="@+id/switch_audio"
+                    android:layout_width="match_parent" android:layout_height="48dp" android:text="@string/audio_enable" />
+                <androidx.appcompat.widget.SwitchCompat android:id="@+id/switch_audio_mute"
+                    android:layout_width="match_parent" android:layout_height="48dp" android:text="@string/audio_mute" />
+                <TextView android:id="@+id/audio_status" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:textSize="12sp" android:accessibilityLiveRegion="polite" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="@string/audio_hint" android:textSize="12sp" android:paddingBottom="8dp" />
+            </LinearLayout>
             <TextView android:id="@+id/rtc_rotation_hint" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:text="@string/rotation_hint" android:textSize="12sp" />
             <TextView android:id="@+id/qual_feedback" android:layout_width="match_parent"

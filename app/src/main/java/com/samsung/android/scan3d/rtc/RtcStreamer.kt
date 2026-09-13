@@ -14,6 +14,8 @@ import android.view.Display
 import com.samsung.android.scan3d.http.RtcSession
 import com.samsung.android.scan3d.http.RtcSignal
 import com.samsung.android.scan3d.http.RtcSignaling
+import com.samsung.android.scan3d.http.ReceiveOffer
+import org.webrtc.audio.JavaAudioDeviceModule
 import kotlinx.coroutines.android.asCoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -29,7 +31,8 @@ import kotlin.coroutines.resumeWithException
 data class RtcStatus(
     val clients: Int = 0, val connected: Int = 0, val mbps: Double = 0.0,
     val fps: Double = 0.0, val rttMs: Double? = null,
-    val encoder: String = "", val limitation: String = "", val error: String? = null
+    val encoder: String = "", val limitation: String = "", val error: String? = null,
+    val audioCapturing: Boolean = false, val audioError: String? = null
 )
 
 /** Native WebRTC owns encoding and RTP; CamEngine remains the only camera owner. */
@@ -42,6 +45,13 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
     private var helper: SurfaceTextureHelper? = null
     private var source: VideoSource? = null
     private var track: VideoTrack? = null
+    private var audioDevice: JavaAudioDeviceModule? = null
+    private var audioSource: AudioSource? = null
+    private var audioTrack: AudioTrack? = null
+    private var audioMuted = false
+    private var audioCapturing = false
+    private var audioError: String? = null
+    private var audioEpoch = 0
     private var surface: Surface? = null
     private var bitrate = 12_000_000
     @Volatile private var rotationDegrees = -1
@@ -65,7 +75,33 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
                 if (info.name == "H264") hardware.createEncoder(info)?.let(::PeriodicKeyFrameEncoder) else null
         }
         check(h264.supportedCodecs.isNotEmpty()) { "No hardware H.264 encoder supports this resolution. Select JPEG or another resolution." }
-        factory = PeerConnectionFactory.builder().setVideoEncoderFactory(h264)
+        val epoch = ++audioEpoch
+        fun recordError(message: String) { handler.post {
+            if (epoch == audioEpoch && !disposed) {
+                audioError = "Microphone unavailable: $message. Toggle audio off and on to retry."
+                audioCapturing = false
+                audioDevice?.setMicrophoneMute(true)
+                audioTrack?.setEnabled(false)
+                updateStatus()
+            }
+        } }
+        audioDevice = JavaAudioDeviceModule.builder(context)
+            .setUseStereoInput(false)
+            .setAudioRecordErrorCallback(object : JavaAudioDeviceModule.AudioRecordErrorCallback {
+                override fun onWebRtcAudioRecordInitError(message: String) = recordError(message)
+                override fun onWebRtcAudioRecordStartError(code: JavaAudioDeviceModule.AudioRecordStartErrorCode, message: String) = recordError(message)
+                override fun onWebRtcAudioRecordError(message: String) = recordError(message)
+            })
+            .setAudioRecordStateCallback(object : JavaAudioDeviceModule.AudioRecordStateCallback {
+                override fun onWebRtcAudioRecordStart() { handler.post {
+                    if (epoch == audioEpoch && !disposed) { audioCapturing = true; updateStatus() }
+                } }
+                override fun onWebRtcAudioRecordStop() { handler.post {
+                    if (epoch == audioEpoch && !disposed) { audioCapturing = false; updateStatus() }
+                } }
+            }).createAudioDeviceModule()
+        audioDevice!!.setMicrophoneMute(true)
+        factory = PeerConnectionFactory.builder().setAudioDeviceModule(audioDevice).setVideoEncoderFactory(h264)
             .setVideoDecoderFactory(HardwareVideoDecoderFactory(shared.eglBaseContext)).createPeerConnectionFactory()
     }
 
@@ -77,6 +113,7 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
         stopCaptureInternal()
         // The hardware factory's size filter is specific to this capture configuration.
         factory?.dispose(); factory = null
+        audioDevice?.release(); audioDevice = null
         egl?.release(); egl = null
         initialize(size)
         bitrate = limitMbps * 1_000_000
@@ -123,9 +160,46 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
         rotationDegrees = degrees.takeIf { it in listOf(0, 90, 180, 270) } ?: -1
     }
 
+    /** Mute changes only samples; adding/removing a track requires new SDP, not a new camera. */
+    fun setAudio(enable: Boolean, muted: Boolean) = runBlocking(dispatcher) {
+        if (disposed) return@runBlocking
+        val allowed = enable && enabled && factory != null &&
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (allowed != (audioTrack != null)) {
+            audioDevice?.setMicrophoneMute(true)
+            audioTrack?.setEnabled(false)
+            peers.toList().forEach { peer -> peer.emit("reset\nAudio settings changed; reconnecting"); peer.dispose() }
+            audioTrack?.dispose(); audioTrack = null
+            audioSource?.dispose(); audioSource = null
+            audioCapturing = false
+            audioError = null
+            if (allowed) {
+                try {
+                    val source = factory!!.createAudioSource(MediaConstraints())
+                    audioSource = source
+                    audioTrack = factory!!.createAudioTrack("remotecam-audio", source)
+                } catch (error: RuntimeException) {
+                    audioSource?.dispose(); audioSource = null
+                    audioError = "Microphone unavailable: ${error.message}. Toggle audio off and on to retry."
+                }
+            }
+        }
+        if (!enable) audioError = null
+        audioMuted = muted
+        audioDevice?.setMicrophoneMute(!allowed || muted || audioError != null)
+        audioTrack?.setEnabled(!muted && audioError == null)
+        updateStatus()
+    }
+
     fun stopCapture() = runBlocking(dispatcher) { stopCaptureInternal() }
     private fun stopCaptureInternal() {
+        audioDevice?.setMicrophoneMute(true)
+        audioTrack?.setEnabled(false)
         peers.toList().forEach { peer -> peer.emit("reset\nCamera settings changed or stream stopped"); peer.dispose() }
+        audioTrack?.dispose(); audioTrack = null
+        audioSource?.dispose(); audioSource = null
+        audioCapturing = false; audioError = null
         helper?.stopListening()
         source?.capturerObserver?.onCapturerStopped()
         surface?.release(); surface = null
@@ -146,6 +220,7 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
     override suspend fun open(offer: String, emit: (String) -> Unit): RtcSession = openPeer(offer, emit, false)
     override suspend fun openHttp(offer: String): RtcSession = openPeer(offer, {}, true)
     private suspend fun openPeer(offer: String, emit: (String) -> Unit, gatherOnce: Boolean): RtcSession = withContext(dispatcher) {
+        val wantsAudio = ReceiveOffer.validate(offer)
         check(enabled && track != null && !disposed) { "Select H.264 + WebRTC and enable Stream on the phone." }
         check(peers.size < 4) { "Maximum of four WebRTC receivers reached." }
         val peer = Peer(emit)
@@ -158,9 +233,17 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
                     else PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
             }
             peer.pc = checkNotNull(factory!!.createPeerConnection(config, peer))
+            peer.pc.setAudioPlayout(false)
             peers.add(peer)
             peer.sender = peer.pc.addTrack(track!!, listOf("remotecam"))
+            if (wantsAudio && audioTrack != null) peer.audioSender = peer.pc.addTrack(audioTrack!!, listOf("remotecam"))
             peer.setDescription(SessionDescription(SessionDescription.Type.OFFER, offer), false)
+            if (peer.audioSender != null) {
+                val opus = factory!!.getRtpSenderCapabilities(MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO)
+                    .codecs.filter { it.name.equals("opus", ignoreCase = true) }
+                peer.pc.transceivers.filter { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO }
+                    .forEach { it.setCodecPreferences(opus).throwError() }
+            }
             val answer = peer.createAnswer()
             check(answer.description.contains("H264/90000", ignoreCase = true)) { "Receiver did not negotiate H.264." }
             peer.setDescription(answer, true)
@@ -179,6 +262,7 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
     private inner class Peer(val emit: (String) -> Unit) : PeerConnection.Observer, RtcSession {
         lateinit var pc: PeerConnection
         var sender: RtpSender? = null
+        var audioSender: RtpSender? = null
         override var answer = ""
         @Volatile override var closed = false
         private val iceGathered = CompletableDeferred<Unit>()
@@ -198,7 +282,12 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
                 params.encodings.forEach { it.maxBitrateBps = bitrate; it.maxFramerate = 30; it.scaleResolutionDownBy = 1.0 }
                 check(output.setParameters(params)) { "Encoder bitrate configuration was rejected" }
             }
-            pc.setBitrate(300_000, minOf(4_000_000, bitrate), bitrate)
+            audioSender?.let { output ->
+                val params = output.parameters
+                params.encodings.forEach { it.maxBitrateBps = 64_000 }
+                check(output.setParameters(params)) { "Audio bitrate configuration was rejected" }
+            }
+            pc.setBitrate(300_000, minOf(4_000_000, bitrate), bitrate + if (audioSender != null) 64_000 else 0)
         }
         override suspend fun addIce(candidate: RtcSignal.Ice) = withContext(dispatcher) {
             if (!closed) pc.addIceCandidate(IceCandidate(candidate.mid, candidate.index, candidate.candidate))
@@ -267,7 +356,9 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
         status = RtcStatus(peers.size, peers.count { it.connected }, peers.sumOf { it.mbps },
             peers.filter { it.connected }.minOfOrNull { it.fps } ?: 0.0,
             peers.mapNotNull { it.rttMs }.maxOrNull(), peers.map { it.encoder }.filter { it.isNotEmpty() }.distinct().joinToString(),
-            peers.map { it.limitation }.filter { it.isNotEmpty() && it != "none" }.distinct().joinToString())
+            peers.map { it.limitation }.filter { it.isNotEmpty() && it != "none" }.distinct().joinToString(),
+            audioCapturing = audioCapturing && audioTrack != null && !audioMuted && audioError == null,
+            audioError = audioError)
     }
     private val poll = object : Runnable {
         override fun run() {
@@ -302,6 +393,8 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
             disposed = true
             handler.removeCallbacks(poll)
             factory?.dispose(); factory = null
+            ++audioEpoch
+            audioDevice?.release(); audioDevice = null
             egl?.release(); egl = null
             thread.quitSafely()
         }

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:gravity="center"
+    android:padding="32dp"
+    android:clickable="true" android:focusable="true">
+    <ImageView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:adjustViewBounds="true" android:maxHeight="@dimen/launch_art_max_height" android:scaleType="fitCenter"
+        android:src="@drawable/launch_illustration" android:contentDescription="@null"
+        android:importantForAccessibility="no" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="@string/app_name" android:textColor="#F4F3EF" android:textSize="32sp"
+        android:fontFamily="sans-serif-medium" android:layout_marginTop="16dp" />
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="@string/launch_tagline" android:textColor="#FFE15A" android:textSize="16sp"
+        android:gravity="center" android:layout_marginTop="8dp" android:layout_marginBottom="32dp" />
+</LinearLayout>

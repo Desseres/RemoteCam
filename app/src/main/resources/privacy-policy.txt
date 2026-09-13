@@ -1,0 +1,28 @@
+RemoteCam — Privacy policy
+Effective date: 12 September 2026 (version 0.3.2)
+Publisher: Desseres
+Contact: apps@kasztelan.me
+
+What the app does
+RemoteCam uses your phone camera to show a local preview and, when Stream is enabled, send live video to a receiver you connect, such as OBS, a browser or go2rtc. The camera can remain active while the app is in the background; a foreground-service notification lets you return to the controls or stop it. A previously enabled Stream setting is restored when you reopen the app. In WebRTC mode, you may optionally enable microphone audio. Microphone access is off by default and requires your permission. Audio and mute settings are restored on reopening; mute sends silence without ending the capture session.
+
+Video, audio and connection data
+Video frames, optional microphone audio and connection details (including local network addresses, session identifiers and transport statistics) are processed to deliver the stream. RemoteCam does not save audio or video recordings on your phone and does not operate a developer-owned server that receives your video or audio. Receivers can record or redistribute it under your control and their own privacy practices. Only transmit content you are entitled to share.
+
+Local settings
+Camera choice, resolution, format, quality, bitrate, rotation, preview, Stream, focus, zoom, audio and mute settings are saved in the app's private storage on your phone. Clear the app's storage or uninstall it to remove these settings. The app disables Android backup of this configuration.
+
+Permissions
+Camera access is used for preview and streaming. Network access connects receivers. On supported Android versions, local-network permission is requested. Notification permission displays camera-service controls. Optional microphone permission is used only to send audio in WebRTC mode. Camera and microphone foreground-service access allows an enabled stream to continue in the background. RemoteCam does not request contacts, location, or shared photo-library access.
+
+Network security
+Use RemoteCam only on a trusted private network. The receiver endpoints do not require a password or pairing; a device that can reach the phone may connect while streaming is enabled. JPEG, MJPEG and connection signaling use unencrypted HTTP/WebSocket traffic. WebRTC media uses DTLS-SRTP, but that does not encrypt HTTP signaling or authenticate a receiver. Do not expose the phone's port to the public internet. A go2rtc relay or a receiver may use a different transport; configure and secure those tools separately.
+
+Analytics, advertising and accounts
+RemoteCam has no advertising, tracking analytics, in-app purchases or user accounts. The app does not upload diagnostic logs to the publisher. Technical diagnostics may be present in Android system logs. Linked websites, such as GitHub, are opened only when you select a link and are governed by their own policies. If you email support, your email address and message are used to answer your request; do not include camera footage or sensitive information unnecessarily.
+
+Retention and deletion
+Live audio/video buffers and session state are temporary and released as streams stop or sessions close. RemoteCam has no developer-hosted video archive to delete. Recordings made by an external receiver must be deleted in that receiver. Stop Stream to stop sending video and audio, use Stop in the app or notification to stop the camera service, and revoke permissions in Android settings if desired. Contact apps@kasztelan.me with privacy questions or requests concerning support correspondence.
+
+Audience and changes
+RemoteCam is a general camera utility and is not designed specifically for children. This policy may change when app behavior changes. Review its effective date and the policy accompanying the version you use. The publisher is Desseres; RemoteCam is not affiliated with Samsung, OBS or go2rtc.

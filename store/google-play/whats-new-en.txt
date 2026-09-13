@@ -1,0 +1,5 @@
+• Refreshed app icon and illustrated launch screen.
+• Privacy policy now available inside the app.
+• New application ID: pl.remotecam.app.
+
+This version installs separately from older releases using the previous application ID. Existing settings do not transfer automatically.

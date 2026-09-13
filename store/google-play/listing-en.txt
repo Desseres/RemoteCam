@@ -1,0 +1,42 @@
+TITLE
+RemoteCam
+
+SHORT DESCRIPTION
+Turn your phone into an OBS camera. Stream over Wi-Fi. No ads or subscriptions.
+
+FULL DESCRIPTION
+Turn your Android phone into a camera for your computer. RemoteCam streams video over your local network to OBS, a web browser or a compatible receiver. Place your phone on a tripod, choose a camera and frame your shot for your stream.
+
+CHOOSE HOW TO RECEIVE VIDEO
+• H.264 + WebRTC: hardware video encoding with an adjustable bitrate limit. Receive video in an OBS Browser Source or through the WHEP input in go2rtc.
+• JPEG Browser: display video in an OBS Browser Source and adjust JPEG quality.
+• MJPEG: a stream of JPEG frames for compatible players and tools.
+
+CONTROL YOUR CAMERA
+Choose from the cameras and resolutions available on your phone. See aspect ratios alongside resolutions. Set automatic or manual stream rotation. Use zoom, autofocus, focus lock or manual focus when supported by the selected camera. Available controls and adjustment ranges depend on your device.
+
+KEEP YOUR SETTINGS
+RemoteCam remembers your camera, resolution, format, quality, bitrate limit, rotation, preview, focus and zoom settings. It also remembers the Stream switch: if streaming was enabled, it resumes when you reopen the app.
+
+PREVIEW AND STREAMING
+Hide the local preview without restarting the camera to make more room for controls. Streaming can continue in the background, with a notification that lets you return to the app or stop the camera.
+
+BUILT-IN HELP
+Find receiver addresses, bitrate information and practical guidance on formats, latency, bandwidth and OBS configuration inside the app. Video smoothness and latency depend on your phone, network and receiver settings.
+
+GET STARTED
+1. Connect your phone and computer to the same trusted local network.
+2. Open RemoteCam, grant the required permissions and choose a format.
+3. Enable Stream and open the appropriate address in your receiver.
+
+IMPORTANT INFORMATION
+RemoteCam streams video without audio. Add your computer microphone separately in OBS. H.264 requires a compatible hardware encoder. Android 9 or later is required. The app interface is in English.
+
+Use a trusted private network. Receivers do not require a password or pairing. JPEG, MJPEG and connection signaling use unencrypted HTTP; WebRTC media uses DTLS-SRTP. Do not expose your phone's streaming port to the internet.
+
+RemoteCam is a free, open-source project released under the MIT license. It has no ads, subscriptions, in-app purchases or user accounts. Thanks to Thomas SIMON / Ruddle for the original project and inspiration.
+
+Website: https://remotecam.kasztelan.me/
+Source code: https://github.com/Desseres/RemoteCam
+Support: apps@kasztelan.me
+RemoteCam is not an official Samsung, OBS or go2rtc app.

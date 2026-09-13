@@ -33,7 +33,8 @@ data class CameraConfig(
     val cameraId: String = "", val resolution: Size? = null,
     val quality: Int = 80, val preview: Boolean = true, val stream: Boolean = false,
     val mode: StreamMode = StreamMode.JPEG, val bitrateMbps: Int = 12,
-    val rotationDegrees: Int = -1, val tuning: CameraTuning = CameraTuning()
+    val rotationDegrees: Int = -1, val tuning: CameraTuning = CameraTuning(),
+    val audioEnabled: Boolean = false, val audioMuted: Boolean = false
 )
 data class CameraStatus(
     val config: CameraConfig = CameraConfig(),
@@ -112,9 +113,10 @@ class CamEngine(context: Context, private val http: HttpService) {
             mutableStatus.value = mutableStatus.value.copy(config = selected)
             preview.enabled = selected.preview
             if (previous.copy(bitrateMbps = selected.bitrateMbps, rotationDegrees = selected.rotationDegrees, tuning = selected.tuning,
-                    preview = selected.preview) == selected &&
+                    preview = selected.preview, audioEnabled = selected.audioEnabled, audioMuted = selected.audioMuted) == selected &&
                 (selected.stream || previous.preview == selected.preview)) {
                 settings.save(selected)
+                rtc.setAudio(selected.stream && selected.mode == StreamMode.WEBRTC && selected.audioEnabled, selected.audioMuted)
                 if (previous.bitrateMbps != selected.bitrateMbps) rtc.setBitrate(selected.bitrateMbps)
                 rtc.setRotation(selected.rotationDegrees)
                 if (previous.rotationDegrees != selected.rotationDegrees) updateJpegOrientation()
@@ -215,6 +217,7 @@ class CamEngine(context: Context, private val http: HttpService) {
                 handler.post { if (ticket == generation && !destroyed) recordFrame(0) }
             } else null
             rtc.enabled = config.stream && config.mode == StreamMode.WEBRTC
+            rtc.setAudio(rtc.enabled && config.audioEnabled, config.audioMuted)
             manager.openCamera(config.cameraId, object : CameraDevice.StateCallback() {
                 override fun onOpened(device: CameraDevice) {
                     if (ticket != generation || destroyed) { device.close(); return }

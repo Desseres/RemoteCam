@@ -5,7 +5,7 @@ import android.util.Log
 import android.util.Size
 
 /** Read and written only on CamEngine's background handler. */
-class CameraSettings(context: Context) {
+class CameraSettings(private val context: Context) {
     private val preferences = context.getSharedPreferences("camera_settings", Context.MODE_PRIVATE)
     private var lastSaved: CameraConfig? = null
 
@@ -26,9 +26,18 @@ class CameraSettings(context: Context) {
             bitrateMbps = preferences.getInt("bitrate_mbps", 12).coerceIn(2, 40),
             rotationDegrees = preferences.getInt("stream_rotation", preferences.getInt("rtc_rotation", -1))
                 .takeIf { it in listOf(0, 90, 180, 270) } ?: -1,
-            tuning = tuningFor(cameraId)
+            tuning = tuningFor(cameraId),
+            audioEnabled = preferences.getBoolean("audio_enabled", false) && hasMicrophonePermission(),
+            audioMuted = preferences.getBoolean("audio_muted", false)
         )
     }
+
+    fun hasMicrophonePermission() = androidx.core.content.ContextCompat.checkSelfPermission(
+        context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    fun restoreMicrophoneService() = hasMicrophonePermission() &&
+        preferences.getBoolean("audio_enabled", false) && preferences.getBoolean("stream", false) &&
+        preferences.getString("mode", "JPEG") == "WEBRTC"
 
     fun tuningFor(cameraId: String) = CameraTuning(
         runCatching { FocusMode.valueOf(preferences.getString("focus_mode_$cameraId", "AUTO")!!) }.getOrDefault(FocusMode.AUTO),
@@ -53,6 +62,8 @@ class CameraSettings(context: Context) {
             .putInt("quality", config.quality)
             .putBoolean("preview", config.preview)
             .putBoolean("stream", config.stream)
+            .putBoolean("audio_enabled", config.audioEnabled)
+            .putBoolean("audio_muted", config.audioMuted)
             .putString("mode", config.mode.name)
             .putInt("bitrate_mbps", config.bitrateMbps)
             .putInt("stream_rotation", config.rotationDegrees)

@@ -16,6 +16,9 @@ import android.widget.ArrayAdapter
 import android.widget.Spinner
 import android.widget.SeekBar
 import android.widget.Toast
+import android.widget.FrameLayout
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.doOnPreDraw
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -29,6 +32,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.samsung.android.scan3d.databinding.FragmentCameraBinding
 import com.samsung.android.scan3d.serv.Cam
 import com.samsung.android.scan3d.serv.CameraStatus
+import com.samsung.android.scan3d.serv.CameraConfig
 import com.samsung.android.scan3d.serv.StreamMode
 import com.samsung.android.scan3d.serv.FocusMode
 import com.samsung.android.scan3d.serv.CameraControlLimits
@@ -39,6 +43,7 @@ import com.samsung.android.scan3d.util.ClipboardUtil
 import com.samsung.android.scan3d.util.IpUtil
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.webrtc.RendererCommon
 
 class CameraActivity : AppCompatActivity() {
@@ -49,6 +54,14 @@ class CameraActivity : AppCompatActivity() {
     private var rendering = false
     private var previewInitialized = false
     private var lastError: String? = null
+    private var launchReady = false
+    private var pendingAudioEnable = false
+    private val microphonePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        pendingAudioEnable = granted
+        if (granted) enablePendingAudio()
+        else Toast.makeText(this, R.string.audio_permission_denied, Toast.LENGTH_LONG).show()
+        service?.engine?.status?.value?.let(::render)
+    }
     private val qualities = listOf(10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
     private val bitrates = listOf(2, 4, 6, 8, 12, 16, 24, 32, 40)
     private val rotations = listOf(-1, 0, 90, 180, 270)
@@ -62,10 +75,11 @@ class CameraActivity : AppCompatActivity() {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             service = (binder as Cam.LocalBinder).service
+            enablePendingAudio()
             collection?.cancel()
             collection = lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    service?.engine?.status?.collect { render(it) }
+                    service?.engine?.status?.collect { render(it); enablePendingAudio() }
                 }
             }
             updateSurface()
@@ -77,10 +91,16 @@ class CameraActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splash = installSplashScreen()
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         binding = FragmentCameraBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        val root = FrameLayout(this)
+        root.addView(binding.root)
+        setContentView(root)
+        // Hand off the system launch screen to the illustration in this same Activity.
+        // Never sleep the UI thread or restart an already running camera for branding.
+        splash.setOnExitAnimationListener { it.remove() }
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
@@ -101,16 +121,62 @@ class CameraActivity : AppCompatActivity() {
         binding.buttonInfo.setOnClickListener { AboutDialog.show(this) }
         binding.buttonRefocus.setOnClickListener { service?.engine?.refocus() }
         binding.buttonResetZoom.setOnClickListener { service?.engine?.let {
-            it.configure(it.status.value.config.copy(tuning = it.status.value.config.tuning.copy(zoom = 1f)))
+            configureCamera(it.status.value.config.copy(tuning = it.status.value.config.tuning.copy(zoom = 1f)))
         } }
         binding.switch1.setOnCheckedChangeListener { _, checked ->
-            if (!rendering) service?.engine?.let { it.configure(it.status.value.config.copy(preview = checked)) }
+            if (!rendering) service?.engine?.let { configureCamera(it.status.value.config.copy(preview = checked)) }
         }
         binding.switch2.setOnCheckedChangeListener { _, checked ->
-            if (!rendering) service?.engine?.let { it.configure(it.status.value.config.copy(stream = checked)) }
+            if (!rendering) service?.engine?.let { configureCamera(it.status.value.config.copy(stream = checked)) }
+        }
+        binding.switchAudio.setOnCheckedChangeListener { _, checked ->
+            if (!rendering) {
+                if (checked && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+                    service?.engine?.status?.value?.let(::render)
+                } else service?.engine?.let { configureCamera(it.status.value.config.copy(audioEnabled = checked)) }
+            }
+        }
+        binding.switchAudioMute.setOnCheckedChangeListener { _, checked ->
+            if (!rendering) service?.engine?.let { configureCamera(it.status.value.config.copy(audioMuted = checked)) }
         }
         binding.viewFinder.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
-        if (!hasRequiredPermissions()) requestAccess()
+        if (savedInstanceState == null) {
+            val illustration = layoutInflater.inflate(R.layout.launch_screen, root, false)
+            root.addView(illustration)
+            binding.root.visibility = View.INVISIBLE
+            illustration.doOnPreDraw {
+                lifecycleScope.launch {
+                    delay(1000)
+                    root.removeView(illustration)
+                    binding.root.visibility = View.VISIBLE
+                    completeLaunch()
+                }
+            }
+        } else completeLaunch()
+    }
+
+    private fun completeLaunch() {
+        launchReady = true
+        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            if (hasRequiredPermissions()) connect() else requestAccess()
+        }
+    }
+
+    private fun configureCamera(config: CameraConfig) {
+        try { service?.configure(config) }
+        catch (error: RuntimeException) {
+            Toast.makeText(this, error.message ?: getString(R.string.audio_permission_denied), Toast.LENGTH_LONG).show()
+            service?.engine?.status?.value?.let(::render)
+        }
+    }
+
+    private fun enablePendingAudio() {
+        if (!pendingAudioEnable || !lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        val config = service?.engine?.status?.value?.config ?: return
+        if (config.cameraId.isEmpty()) return
+        pendingAudioEnable = false
+        configureCamera(config.copy(audioEnabled = true))
     }
 
     private fun requiredPermissions() = buildList {
@@ -125,7 +191,7 @@ class CameraActivity : AppCompatActivity() {
             listOf(Manifest.permission.POST_NOTIFICATIONS) else emptyList()).toTypedArray())
     }
     private fun connect() {
-        if (bound || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+        if (!launchReady || bound || !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
         ContextCompat.startForegroundService(this, Intent(this, Cam::class.java))
         bound = bindService(Intent(this, Cam::class.java), connection, Context.BIND_AUTO_CREATE)
     }
@@ -138,7 +204,14 @@ class CameraActivity : AppCompatActivity() {
         binding.go2rtcAddress.text = IpUtil.getLocalIpAddress()?.let { "webrtc:http://$it:8080/whep" } ?: getString(R.string.connect_wifi)
         if (hasRequiredPermissions()) connect()
     }
-    override fun onResume() { super.onResume(); if (hasRequiredPermissions()) connect(); updateSurface() }
+    override fun onResume() {
+        super.onResume()
+        if (launchReady) {
+            if (hasRequiredPermissions()) connect() else requestAccess()
+        }
+        updateSurface()
+        enablePendingAudio()
+    }
     override fun onStop() {
         releasePreview()
         collection?.cancel()
@@ -193,6 +266,16 @@ class CameraActivity : AppCompatActivity() {
             transfer.ackMs?.let { getString(R.string.transfer_ack, it, transfer.skippedPercent) }.orEmpty())
         binding.transferFeedback.setTextColor(ContextCompat.getColor(this, color))
         val webRtc = status.config.mode == StreamMode.WEBRTC
+        binding.rtcAudioPanel.visibility = if (webRtc) View.VISIBLE else View.GONE
+        binding.switchAudio.isChecked = status.config.audioEnabled
+        binding.switchAudioMute.isChecked = status.config.audioMuted
+        binding.switchAudioMute.isEnabled = status.config.audioEnabled
+        binding.audioStatus.text = status.rtc.audioError ?: getString(when {
+            !status.config.audioEnabled -> R.string.audio_off
+            status.config.audioMuted -> R.string.audio_muted
+            status.rtc.audioCapturing -> R.string.audio_live
+            else -> R.string.audio_waiting
+        })
         binding.jpegQualityRow.visibility = if (webRtc) View.GONE else View.VISIBLE
         binding.rtcBitrateRow.visibility = if (webRtc) View.VISIBLE else View.GONE
         binding.rtcRotationHint.setText(if (webRtc) R.string.rotation_hint else R.string.rotation_jpeg_hint)
@@ -212,15 +295,15 @@ class CameraActivity : AppCompatActivity() {
             binding.transferFeedback.setTextColor(ContextCompat.getColor(this, rtcColor))
         }
         setOptions(binding.spinnerMode, listOf(getString(R.string.mode_jpeg), getString(R.string.mode_rtc)), status.config.mode.ordinal) { index ->
-            service?.engine?.let { it.configure(it.status.value.config.copy(mode = StreamMode.entries[index])) }
+            service?.engine?.let { configureCamera(it.status.value.config.copy(mode = StreamMode.entries[index])) }
         }
         setOptions(binding.spinnerBitrate, bitrates.map { getString(R.string.bitrate_option, it) }, bitrates.indexOf(status.config.bitrateMbps)) { index ->
-            service?.engine?.let { it.configure(it.status.value.config.copy(bitrateMbps = bitrates[index])) }
+            service?.engine?.let { configureCamera(it.status.value.config.copy(bitrateMbps = bitrates[index])) }
         }
         setOptions(binding.spinnerRotation, rotations.map {
             if (it == -1) getString(R.string.rotation_auto) else getString(R.string.rotation_option, it)
         }, rotations.indexOf(status.config.rotationDegrees)) { index ->
-            service?.engine?.let { it.configure(it.status.value.config.copy(rotationDegrees = rotations[index])) }
+            service?.engine?.let { configureCamera(it.status.value.config.copy(rotationDegrees = rotations[index])) }
         }
         binding.previewContainer.visibility = if (status.config.preview) View.VISIBLE else View.GONE
         if (status.config.preview || status.config.stream) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -229,18 +312,18 @@ class CameraActivity : AppCompatActivity() {
             status.sensors.indexOfFirst { it.cameraId == status.config.cameraId }) { index ->
             service?.engine?.let { engine ->
                 val camera = engine.status.value.sensors.getOrNull(index) ?: return@let
-                engine.configure(engine.status.value.config.copy(cameraId = camera.cameraId, resolution = null))
+                configureCamera(engine.status.value.config.copy(cameraId = camera.cameraId, resolution = null))
             }
         }
         setOptions(binding.spinnerRes, status.sizes.map(::resolutionLabel),
             status.sizes.indexOf(status.config.resolution)) { index ->
             service?.engine?.let { engine ->
                 val size = engine.status.value.sizes.getOrNull(index) ?: return@let
-                engine.configure(engine.status.value.config.copy(resolution = size))
+                configureCamera(engine.status.value.config.copy(resolution = size))
             }
         }
         setOptions(binding.spinnerQua, qualities.map(Int::toString), qualities.indexOf(status.config.quality)) { index ->
-            service?.engine?.let { it.configure(it.status.value.config.copy(quality = qualities[index])) }
+            service?.engine?.let { configureCamera(it.status.value.config.copy(quality = qualities[index])) }
         }
         rendering = false
         if (status.error != null && status.error != lastError)
@@ -265,7 +348,7 @@ class CameraActivity : AppCompatActivity() {
                 // can also freeze existing focus without a new autofocus sweep.
                 val distance = if (mode == FocusMode.MANUAL) current.focusDistance ?: current.config.tuning.focusDistance
                     else current.config.tuning.focusDistance
-                engine.configure(current.config.copy(tuning = current.config.tuning.copy(focusMode = mode, focusDistance = distance)))
+                configureCamera(current.config.copy(tuning = current.config.tuning.copy(focusMode = mode, focusDistance = distance)))
             }
         }
         binding.buttonRefocus.visibility = if (tuning.focusMode != FocusMode.MANUAL && limits.focusLock) View.VISIBLE else View.GONE
@@ -275,7 +358,7 @@ class CameraActivity : AppCompatActivity() {
         bindSlider(binding.seekFocus, focusProgress, { progress ->
             binding.manualFocusValue.text = focusDistanceLabel(focusValue(progress), limits)
         }) { progress -> service?.engine?.let {
-            it.configure(it.status.value.config.copy(tuning = it.status.value.config.tuning.copy(focusDistance = focusValue(progress))))
+            configureCamera(it.status.value.config.copy(tuning = it.status.value.config.tuning.copy(focusDistance = focusValue(progress))))
         } }
         val focusMessage = when {
             limits.maxFocusDistance == 0f -> R.string.focus_fixed
@@ -293,7 +376,7 @@ class CameraActivity : AppCompatActivity() {
         bindSlider(binding.seekZoom, if (span > 0) ((tuning.zoom - limits.minZoom) / span * 1000).toInt() else 0, { progress ->
             binding.zoomValue.text = getString(R.string.zoom_value, zoomValue(progress), limits.minZoom, limits.maxZoom)
         }) { progress -> service?.engine?.let {
-            it.configure(it.status.value.config.copy(tuning = it.status.value.config.tuning.copy(zoom = zoomValue(progress))))
+            configureCamera(it.status.value.config.copy(tuning = it.status.value.config.tuning.copy(zoom = zoomValue(progress))))
         } }
         if (!binding.seekZoom.isPressed)
             binding.zoomValue.text = getString(R.string.zoom_value, tuning.zoom, limits.minZoom, limits.maxZoom)
