@@ -78,11 +78,15 @@ sprawdzają oferowane kodeki, RTX, brak zgodności, komunikaty i ponowne łącze
 oraz zachowanie wyciszonego odbiornika z audio.
 
 Te testy nie wykonują sprzętowego kodowania, dekodowania ani transmisji sieciowej.
-W chwili implementacji telefon nie był podłączony przez ADB; H.265 nie ma jeszcze
-potwierdzenia działania na fizycznym urządzeniu. Wyniki wcześniejszych testów
-H.264/Opus z 0.3.2 nie są wynikami testów nowego trybu.
+Po udostępnieniu telefonu wykonano także rzeczywisty test na **Honor BVL-N49
+z Androidem 16**: sprzętowy HEVC 1080p przy około 30 kl./s, odbiór bezpośredni
+i przez go2rtc/WHEP oraz zachowanie po przejściu aplikacji w tło.
+Zakres potwierdzenia i ograniczenia opisuje [raport H.265](h265-validation.md).
 
-## Testy do wykonania na urządzeniach
+## Lista prób na urządzeniach
+
+Stan wykonanych prób dla telefonu Honor znajduje się w powyższym raporcie.
+Poniższa lista służy również do weryfikacji kolejnych urządzeń i odbiorników.
 
 | Próba | Oczekiwany wynik |
 | --- | --- |
