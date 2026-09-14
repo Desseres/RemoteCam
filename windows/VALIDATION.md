@@ -1,5 +1,16 @@
 # Windows prototype validation — 14 September 2026
 
+## 0.1.8 information tab
+
+Built the desktop application and visually checked the information tab at the
+default and minimum window sizes using `--render-about` and
+`--render-about-small` (both exit 0). The minimum size scrolls the content;
+navigation and all three primary links fit horizontally. The preview tab was
+also rendered to check navigation layout. The website returned HTTP 200 and
+contained both the download anchor and APK links. Download navigation uses the
+website section rather than a pinned APK version. Local license targets are
+included in the package. This UI update does not change the receiver pipeline.
+
 ## 0.1.7 tray and suspended preview; optional audio module
 
 The live tray probe exercised the real window X path with the physical phone.

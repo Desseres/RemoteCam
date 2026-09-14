@@ -5,9 +5,14 @@ Virtual Camera** to camera applications. This experimental companion runs
 independently of OBS Browser Source. An optional microphone module routes phone
 audio through VB-CABLE as a separate Windows recording device.
 
+The **Informacje** tab shows the installed version, purpose and project authors.
+It links to the RemoteCam website, the current APK download section, GitHub and
+issue reporting in the default browser. The MIT license and bundled component
+notices are available locally, including when the computer is offline.
+
 ## Install (recommended)
 
-Run **RemoteCam-Desktop-0.1.7-test-Setup.exe** on Windows 11 x64 and accept
+Run **RemoteCam-Desktop-0.1.8-test-Setup.exe** on Windows 11 x64 and accept
 the administrator prompt. This single, offline installer includes the application,
 decoder, relay and camera component. It creates a Start menu shortcut and offers
 an optional desktop shortcut. No separate camera-registration script is needed.
@@ -162,11 +167,11 @@ retry after restarting Windows. The desktop folder can then be removed.
 Requires Visual Studio 2022 C++ tools, Windows SDK 10.0.22000.0, and Windows 11 x64.
 Run `prepare-dependencies.ps1`, then `build.ps1` from PowerShell.
 Also run `prepare-audio.ps1` once for the verified NAudio/VB-CABLE dependencies.
-Output: `dist/windows/RemoteCam-Desktop-0.1.7-test/`.
+Output: `dist/windows/RemoteCam-Desktop-0.1.8-test/`.
 
 For the single EXE installer, run `prepare-installer.ps1` once to download and
 verify the pinned Inno Setup 6.7.3 compiler, then run `build-installer.ps1`.
-Output: `dist/windows/RemoteCam-Desktop-0.1.7-test-Setup.exe`, with a SHA-256 sidecar.
+Output: `dist/windows/RemoteCam-Desktop-0.1.8-test-Setup.exe`, with a SHA-256 sidecar.
 Pass `-Iscc PATH` to use an existing compiler, or `-SkipAppBuild` to package an
 already built app. Version and channel are in `version.json` (installer is test-only).
 The installer uses Windows' normal elevation prompt to register the camera in
@@ -185,6 +190,8 @@ NACK feedback are enabled only in the desktop child via `REMOTECAM_RTP_REPAIR=1`
 The separately installed go2rtc used with OBS is not replaced.
 
 - `RemoteCam.exe --self-test`: address validation and NV12 preview checks.
+- `RemoteCam.exe --render-about ABSOLUTE_PNG_PATH`: render the information tab;
+  `--render-about-small` checks the minimum window size with scrolling.
 - `RemoteCam.exe --tray-test PHONE_IP:8080 ABSOLUTE_LOG_PATH`: live hidden-window
   camera API probe, zero preview conversions while hidden, preview resume/manual
   disable/minimize, optional audio continuity through installed VB-CABLE, and exit.

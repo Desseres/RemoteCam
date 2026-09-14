@@ -76,7 +76,7 @@ namespace RemoteCamDesktop
                 }
                 return result;
             }
-            if (args.Length == 2 && (args[0] == "--render-ui" || args[0] == "--render-hardware"))
+            if (args.Length == 2 && (args[0] == "--render-ui" || args[0] == "--render-hardware" || args[0] == "--render-about" || args[0] == "--render-about-small"))
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
@@ -87,6 +87,10 @@ namespace RemoteCamDesktop
                     window.Location = new Point(-32000, -32000);
                     window.Show();
                     if (args[0] == "--render-hardware") window.ShowHardwareForRender();
+                    if (args[0].StartsWith("--render-about")) {
+                        if (args[0] == "--render-about-small") window.Size = window.MinimumSize;
+                        window.aboutTab.PerformClick();
+                    }
                     Application.DoEvents();
                     using (var bitmap = new Bitmap(window.Width, window.Height))
                     {
@@ -648,6 +652,7 @@ namespace RemoteCamDesktop
         long previewConversions;
         readonly Panel hardwarePage = new Panel();
         readonly Button hardwareTab = new Button();
+        internal readonly Button aboutTab = new Button();
         AudioPanel audioPage;
         readonly Label hardwareText = new Label(), streamText = new Label(), adviceText = new Label();
         readonly StreamAdvice advice = new StreamAdvice();
@@ -708,6 +713,8 @@ namespace RemoteCamDesktop
             content.Controls.Add(preview);
             audioPage = new AudioPanel(() => receiver) { Dock = DockStyle.Fill, Visible = false };
             content.Controls.Add(audioPage);
+            var aboutPage = new AboutPanel { Dock = DockStyle.Fill, Visible = false };
+            content.Controls.Add(aboutPage);
             hardwarePage.Dock = DockStyle.Fill; hardwarePage.BackColor = background; hardwarePage.AutoScroll = true;
             var cards = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(22, 12, 22, 20) };
             var equipmentTitle = new Label { Text = "TWÓJ KOMPUTER", ForeColor = accent, AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
@@ -719,14 +726,16 @@ namespace RemoteCamDesktop
             }
             cards.Resize += delegate { foreach (Control label in cards.Controls) label.MaximumSize = new Size(Math.Max(200, cards.ClientSize.Width - 48), 0); };
             hardwarePage.Controls.Add(cards); content.Controls.Add(hardwarePage); hardwarePage.Visible = false;
-            var tabs = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 43, Padding = new Padding(22, 2, 0, 0) };
-            var videoTab = new Button { Text = "Podgląd", Width = 120, Height = 32 };
-            hardwareTab.Text = "Sprzęt i jakość"; hardwareTab.Width = 165; hardwareTab.Height = 32;
-            var audioTab = new Button { Text = "Mikrofon", Width = 130, Height = 32 };
-            foreach (Button tab in new[] {videoTab, hardwareTab, audioTab}) { tab.FlatStyle = FlatStyle.Flat; tab.FlatAppearance.BorderColor = Color.FromArgb(86, 73, 51); tab.Cursor = Cursors.Hand; }
+            var tabs = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, MinimumSize = new Size(0, 43), Padding = new Padding(22, 2, 0, 0) };
+            var videoTab = new Button { Text = "Podgląd", Width = 100, Height = 32 };
+            hardwareTab.Text = "Sprzęt i jakość"; hardwareTab.Width = 150; hardwareTab.Height = 32;
+            var audioTab = new Button { Text = "Mikrofon", Width = 105, Height = 32 };
+            aboutTab.Text = "Informacje"; aboutTab.Width = 115; aboutTab.Height = 32;
+            foreach (Button tab in new[] {videoTab, hardwareTab, audioTab, aboutTab}) { tab.FlatStyle = FlatStyle.Flat; tab.FlatAppearance.BorderColor = Color.FromArgb(86, 73, 51); tab.Cursor = Cursors.Hand; }
             Action<bool> selectTab = delegate(bool hardware) {
                 preview.Visible = !hardware; hardwarePage.Visible = hardware; if (hardware) hardwarePage.BringToFront();
                 audioPage.Visible = false; audioTab.BackColor = panel; audioTab.ForeColor = ink;
+                aboutPage.Visible = false; aboutTab.BackColor = panel; aboutTab.ForeColor = ink;
                 footer.Height = hardware ? 90 : 170; instructions.Visible = !hardware;
                 videoTab.BackColor = hardware ? panel : accent; videoTab.ForeColor = hardware ? ink : background;
                 hardwareTab.BackColor = hardware ? accent : panel; hardwareTab.ForeColor = hardware ? background : ink;
@@ -737,9 +746,14 @@ namespace RemoteCamDesktop
                 footer.Height = 90; instructions.Visible = false; videoTab.BackColor = panel; videoTab.ForeColor = ink;
                 audioTab.BackColor = accent; audioTab.ForeColor = background; audioPage.RefreshDevices();
             };
+            aboutTab.Click += delegate {
+                selectTab(false); preview.Visible = false; aboutPage.Visible = true; aboutPage.BringToFront();
+                footer.Height = 90; instructions.Visible = false; videoTab.BackColor = panel; videoTab.ForeColor = ink;
+                aboutTab.BackColor = accent; aboutTab.ForeColor = background;
+            };
             previewEnabled.Text = "Podgląd lokalny"; previewEnabled.Checked = true; previewEnabled.AutoSize = true; previewEnabled.Margin = new Padding(14, 7, 0, 0);
             previewEnabled.CheckedChanged += delegate { UpdatePreviewMode(); };
-            selectTab(false); tabs.Controls.AddRange(new Control[] { videoTab, hardwareTab, audioTab, previewEnabled });
+            selectTab(false); tabs.Controls.AddRange(new Control[] { videoTab, hardwareTab, audioTab, aboutTab, previewEnabled });
             Controls.Add(content); Controls.Add(footer); Controls.Add(tabs); Controls.Add(connection); Controls.Add(help); Controls.Add(title);
             UpdateHardware(null);
             Shown += async delegate {
