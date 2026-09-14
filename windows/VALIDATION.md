@@ -1,5 +1,16 @@
 # Windows prototype validation — 14 September 2026
 
+## 0.1.9 microphone layout
+
+Reproduced the overlapping device selector and buttons with `--render-audio`.
+The table now uses an explicit full-width column and auto-sized rows; width
+constraints apply only to wrapping labels, not fixed-height input controls.
+The selector, volume slider and level meter occupy their own full-width rows.
+Disabled button captions and device names use readable muted text on the dark
+background. The expanded device list accommodates longer endpoint names.
+Visually checked rendered default and minimum-size windows (exit 0): no overlap,
+the complete installed VB-CABLE name is visible, and lower content scrolls.
+
 ## 0.1.8 information tab
 
 Built the desktop application and visually checked the information tab at the

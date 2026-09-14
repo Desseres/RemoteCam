@@ -28,33 +28,55 @@ namespace RemoteCamDesktop
             this.receiver = receiver;
             BackColor = Color.FromArgb(28, 24, 21); ForeColor = Color.FromArgb(243, 242, 237); AutoScroll = true;
             var accent = Color.FromArgb(255, 225, 90);
-            var content = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(22, 12, 22, 20) };
+            var content = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = 1, Padding = new Padding(22, 12, 22, 20) };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             var title = new Label { Text = "REMOTECAM MICROPHONE", ForeColor = accent, Font = new Font("Segoe UI", 11, FontStyle.Bold), AutoSize = true };
             var description = new Label { Text = "Dźwięk z telefonu jako osobne wejście Windows. Włącz mikrofon w telefonie i kliknij Połącz w RemoteCam.", AutoSize = true };
-            devices.DropDownStyle = ComboBoxStyle.DropDownList; devices.Width = 470; devices.BackColor = Color.FromArgb(40, 34, 29); devices.ForeColor = ForeColor;
-            var actions = new FlowLayoutPanel { AutoSize = true, WrapContents = true };
+            devices.DropDownStyle = ComboBoxStyle.DropDownList; devices.Dock = DockStyle.Top; devices.BackColor = Color.FromArgb(40, 34, 29); devices.ForeColor = ForeColor;
+            devices.FlatStyle = FlatStyle.Flat; devices.DrawMode = DrawMode.OwnerDrawFixed;
+            devices.DrawItem += delegate(object sender, DrawItemEventArgs e) {
+                using (var brush = new SolidBrush(devices.BackColor)) e.Graphics.FillRectangle(brush, e.Bounds);
+                string text = e.Index >= 0 ? devices.Items[e.Index].ToString() : "Wybierz urządzenie VB-CABLE";
+                TextRenderer.DrawText(e.Graphics, text, e.Font, e.Bounds, devices.Enabled ? ForeColor : Color.FromArgb(181, 171, 157), TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                e.DrawFocusRectangle();
+            };
+            devices.DropDown += delegate {
+                int width = devices.Width;
+                foreach (var item in devices.Items) width = Math.Max(width, TextRenderer.MeasureText(item.ToString(), devices.Font).Width + 32);
+                devices.DropDownWidth = Math.Min(Screen.FromControl(devices).WorkingArea.Width, width);
+            };
+            var actions = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Dock = DockStyle.Top, WrapContents = true };
             enable.Text = "Włącz mikrofon"; install.Text = "Zainstaluj VB-CABLE"; rename.Text = "Ustawienia audio Windows";
             foreach (var button in new[] { enable, install, rename }) {
                 button.AutoSize = true; button.Height = 32; button.FlatStyle = FlatStyle.Flat;
                 button.BackColor = Color.FromArgb(40, 34, 29); button.ForeColor = ForeColor;
                 button.FlatAppearance.BorderColor = Color.FromArgb(86, 73, 51); actions.Controls.Add(button);
+                button.Paint += delegate(object sender, PaintEventArgs e) {
+                    var disabled = (Button)sender;
+                    if (disabled.Enabled) return;
+                    e.Graphics.Clear(disabled.BackColor);
+                    using (var pen = new Pen(disabled.FlatAppearance.BorderColor)) e.Graphics.DrawRectangle(pen, 0, 0, disabled.Width - 1, disabled.Height - 1);
+                    TextRenderer.DrawText(e.Graphics, disabled.Text, disabled.Font, disabled.ClientRectangle, Color.FromArgb(181, 171, 157), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                };
             }
             enable.BackColor = accent; enable.ForeColor = BackColor;
             mute.Text = "Wycisz mikrofon"; mute.AutoSize = true;
-            volume.Minimum = 0; volume.Maximum = 100; volume.Value = 100; volume.TickFrequency = 10; volume.Width = 350;
+            volume.Minimum = 0; volume.Maximum = 100; volume.Value = 100; volume.TickFrequency = 10; volume.Dock = DockStyle.Top;
             volumeText.Text = "Głośność do mikrofonu: 100%"; volumeText.AutoSize = true;
-            level.Width = 470; level.Height = 12;
+            level.Dock = DockStyle.Top; level.Height = 12;
             state.Text = "Mikrofon wyłączony. Odsłuch lokalny wyłączony."; state.AutoSize = true;
             var guidance = new Label { AutoSize = true, ForeColor = Color.FromArgb(181, 171, 157), Text =
                 "W OBS dodaj Przechwytywanie wejścia dźwięku → RemoteCam Microphone (VB-CABLE), albo CABLE Output. Ustaw Monitorowanie wyłączone. KH50 pozostaje osobnym źródłem.\n\nWycisz odtwarzacz telefonu w przeglądarce, aby uniknąć podwójnego audio. W Windows zostaw wyłączone „Nasłuchuj tego urządzenia”. Aplikacja nie odtwarza mikrofonu na głośnikach.\n\nVB-CABLE jest osobnym produktem VB-Audio (donationware). Jeśli jest przydatny, wesprzyj autora lub kup licencję. Nie jest usuwany razem z RemoteCam." };
             var link = new LinkLabel { Text = "VB-Audio — pobieranie i licencja", AutoSize = true, LinkColor = accent };
             link.LinkClicked += delegate { Process.Start(new ProcessStartInfo("https://vb-audio.com/Cable/") { UseShellExecute = true }); };
             foreach (Control item in new Control[] {title, description, devices, actions, mute, volumeText, volume, level, state, guidance, link}) {
-                item.Margin = new Padding(0, 0, 0, 12); content.Controls.Add(item);
+                item.Margin = new Padding(0, 0, 0, 12);
+                content.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+                content.Controls.Add(item, 0, content.RowCount++);
             }
             content.Resize += delegate {
-                int width = Math.Max(200, content.ClientSize.Width - 48);
-                foreach (Control item in content.Controls) item.MaximumSize = new Size(width, 0);
+                int width = Math.Max(200, content.ClientSize.Width - content.Padding.Horizontal);
+                foreach (Control item in content.Controls) if (item is Label) item.MaximumSize = new Size(width, 0);
             };
             Controls.Add(content);
             mute.CheckedChanged += delegate { if (module != null) module.Buffer.Muted = mute.Checked; };

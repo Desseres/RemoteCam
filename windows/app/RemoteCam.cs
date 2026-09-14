@@ -76,7 +76,7 @@ namespace RemoteCamDesktop
                 }
                 return result;
             }
-            if (args.Length == 2 && (args[0] == "--render-ui" || args[0] == "--render-hardware" || args[0] == "--render-about" || args[0] == "--render-about-small"))
+            if (args.Length == 2 && (args[0] == "--render-ui" || args[0] == "--render-hardware" || args[0] == "--render-about" || args[0] == "--render-about-small" || args[0] == "--render-audio" || args[0] == "--render-audio-small"))
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
@@ -90,6 +90,10 @@ namespace RemoteCamDesktop
                     if (args[0].StartsWith("--render-about")) {
                         if (args[0] == "--render-about-small") window.Size = window.MinimumSize;
                         window.aboutTab.PerformClick();
+                    }
+                    if (args[0].StartsWith("--render-audio")) {
+                        if (args[0] == "--render-audio-small") window.Size = window.MinimumSize;
+                        window.audioTab.PerformClick();
                     }
                     Application.DoEvents();
                     using (var bitmap = new Bitmap(window.Width, window.Height))
@@ -653,6 +657,7 @@ namespace RemoteCamDesktop
         readonly Panel hardwarePage = new Panel();
         readonly Button hardwareTab = new Button();
         internal readonly Button aboutTab = new Button();
+        internal readonly Button audioTab = new Button();
         AudioPanel audioPage;
         readonly Label hardwareText = new Label(), streamText = new Label(), adviceText = new Label();
         readonly StreamAdvice advice = new StreamAdvice();
@@ -729,7 +734,7 @@ namespace RemoteCamDesktop
             var tabs = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, MinimumSize = new Size(0, 43), Padding = new Padding(22, 2, 0, 0) };
             var videoTab = new Button { Text = "Podgląd", Width = 100, Height = 32 };
             hardwareTab.Text = "Sprzęt i jakość"; hardwareTab.Width = 150; hardwareTab.Height = 32;
-            var audioTab = new Button { Text = "Mikrofon", Width = 105, Height = 32 };
+            audioTab.Text = "Mikrofon"; audioTab.Width = 105; audioTab.Height = 32;
             aboutTab.Text = "Informacje"; aboutTab.Width = 115; aboutTab.Height = 32;
             foreach (Button tab in new[] {videoTab, hardwareTab, audioTab, aboutTab}) { tab.FlatStyle = FlatStyle.Flat; tab.FlatAppearance.BorderColor = Color.FromArgb(86, 73, 51); tab.Cursor = Cursors.Hand; }
             Action<bool> selectTab = delegate(bool hardware) {
