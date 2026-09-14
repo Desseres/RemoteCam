@@ -1,6 +1,15 @@
 # RemoteCam
 
+<p align="center">
+  <img src="store/google-play/graphics/feature-graphic-1024x500.png" alt="RemoteCam — your phone camera on your computer, with WebRTC, JPEG and MJPEG" width="720">
+</p>
+
 **Your Android camera on your computer. Free, without ads or paid feature unlocks. Open source under the MIT license.**
+
+[**Download test APK 0.3.2**](https://github.com/Desseres/RemoteCam/releases/download/v0.3.2/RemoteCam-0.3.2.apk)
+· [Release notes & checksums](https://github.com/Desseres/RemoteCam/releases/tag/v0.3.2)
+· [Website (PL / EN)](https://remotecam.kasztelan.me/)
+· [Report an issue](https://github.com/Desseres/RemoteCam/issues)
 
 RemoteCam streams your phone's camera over your local network so you can use it
 in OBS or another compatible viewer. This fork brings the original application
@@ -10,6 +19,59 @@ simple purpose and free, ad-free approach.
 In a world full of ads, subscriptions and paywalls, we want this project to
 remain freely available to everyone. Download the source, build it, use it and
 make it your own. Contributions and improvements are welcome.
+
+## Install the test version
+
+**0.3.2 is a public prerelease for testing**, distributed as a signed release APK
+(about 61 MiB). It requires **Android 9 or newer**. You can install it directly;
+Android Studio and a computer are not required for installation.
+
+1. On your phone, [download RemoteCam-0.3.2.apk](https://github.com/Desseres/RemoteCam/releases/download/v0.3.2/RemoteCam-0.3.2.apk).
+2. Open the downloaded file. If Android asks, allow **Install unknown apps** for
+   the browser or file manager you used, then complete installation.
+3. Connect the phone and computer to the same trusted local network. Open
+   RemoteCam and grant camera access (and local network access if requested).
+4. Choose **H.264 + WebRTC** and enable **Stream**. Open the app's WebRTC browser
+   address on your computer, or add it as an OBS **Browser Source**.
+5. For phone audio, enable **Microphone audio**, grant microphone access and
+   enable sound in the receiver. In OBS, select **Control audio via OBS**.
+
+JPEG Browser and MJPEG are also available for video-only receivers. See
+[OBS setup](#use-with-obs) and the [audio guide](docs/webrtc-audio.md) for details.
+
+Updating release 0.3.1 with the same `pl.remotecam.app` package and signing key
+preserves settings. A debug build with that package has a different signature;
+switching to release requires uninstalling it, which deletes its settings.
+Older packages with a different application ID install alongside this version.
+
+This build has been tested on an Android 16 phone; wider device coverage,
+locked-screen / Standby behavior and end-to-end audio sync still need testing.
+Please [report your results](https://github.com/Desseres/RemoteCam/issues), including
+phone model, Android version, stream format, receiver and steps to reproduce.
+
+## See what changed
+
+The original camera streamer now has camera and format selection, focus and zoom
+controls, copyable receiver addresses and a built-in streaming guide.
+These are real screenshots from the project. The modernization screenshots were
+taken before the 0.3.2 microphone controls were added, so those controls are not
+shown here. Click any screenshot to open it at full size.
+
+| Original interface | Modernized camera controls |
+| :---: | :---: |
+| <a href="assets/screen.jpg"><img src="assets/screen.jpg" alt="Original RemoteCam interface with camera preview and basic JPEG settings" width="280"></a> | <a href="store/google-play/screenshots/01-camera-controls.png"><img src="store/google-play/screenshots/01-camera-controls.png" alt="Modernized RemoteCam camera controls with WebRTC, resolution, focus, zoom and bitrate settings" width="280"></a> |
+| Camera preview and basic JPEG streaming. | More camera controls, hardware H.264 streaming and independent preview. |
+
+| Focus & zoom | Receiver addresses | In-app guide |
+| :---: | :---: | :---: |
+| <a href="store/google-play/screenshots/02-focus-options.png"><img src="store/google-play/screenshots/02-focus-options.png" alt="Focus options: Automatic, Focus and lock, and Manual" width="240"></a> | <a href="store/google-play/screenshots/03-receiver-addresses.png"><img src="store/google-play/screenshots/03-receiver-addresses.png" alt="Copyable browser, MJPEG, WebRTC and go2rtc addresses with receiver statistics" width="240"></a> | <a href="store/google-play/screenshots/04-streaming-guide.png"><img src="store/google-play/screenshots/04-streaming-guide.png" alt="Streaming guide with Formats, Bandwidth and OBS setup tabs" width="240"></a> |
+| Choose automatic focus, lock it or adjust it manually when supported. | Copy the right address for your browser, OBS or go2rtc. | Find format explanations, bandwidth guidance and OBS instructions. |
+
+**New in 0.3.2:** optional phone microphone audio over WebRTC, a separate mute
+control and audio playback in browsers, OBS and go2rtc. Audio starts disabled;
+JPEG and MJPEG remain video only.
+
+## Project resources
 
 Google Play preparation (listing, graphics, privacy policy and submission checklist):
 [Play Console publication pack](store/google-play/PLAY-CONSOLE.md).
@@ -28,7 +90,7 @@ Android implementation.
 
 ## Updated for modern Android
 
-The current version is **0.3.0**:
+The current test version is **0.3.2**:
 
 - **Android 17 / API 37** compile and target SDK, with Android 9 / API 28 as the minimum.
 - Updated build tools: **Android Gradle Plugin 9.4.0**, **Gradle 9.7.1** and Java 17 bytecode.
@@ -40,6 +102,7 @@ The current version is **0.3.0**:
 - Toggle Preview without restarting an active stream; hiding it gives settings the full screen.
 - A browser receiver that skips stale frames to limit accumulated delay.
 - Optional hardware **H.264 + WebRTC** streaming, with an adjustable bitrate limit.
+- Optional **Opus microphone audio** over WebRTC, with saved audio and mute settings.
 - Direct go2rtc input via HTTP/SDP at `/whep`, alongside the existing browser player.
 - Saved stream rotation for all three addresses: automatic or fixed 0°, 90°, 180° and 270° clockwise.
 - Separate, copyable JPEG Browser, MJPEG and WebRTC addresses.
@@ -80,7 +143,7 @@ ASCII path if that directory is already used by another checkout.
 Build and install your own development version using Android Studio or Android
 SDK tools. For a signed APK suitable for a GitHub Release, see the
 [release packaging and signing guide](docs/releases.md) and
-[0.3.0 release notes](docs/releases/v0.3.0.md).
+[0.3.2 release notes](docs/releases/v0.3.2.md).
 
 ## Use with OBS
 
