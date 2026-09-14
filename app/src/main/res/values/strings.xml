@@ -65,8 +65,8 @@
     <string name="zoom_value">%1$.2f×  ·  %2$.1f–%3$.1f×</string>
     <string name="zoom_hint">Zoom affects preview and every stream. Hardware determines the range; digital zoom magnifies pixels and can reduce detail.</string>
     <string name="about_version">Version %1$s</string>
-    <string name="about_author_title">Thanks to the original author</string>
-    <string name="about_author_body">Built on the original RemoteCam by Thomas SIMON (Ruddle). Thank you for the inspiration and for sharing this app freely with everyone.\n\nOriginal repository: Ruddle/RemoteCam\nCopyright © 2023 Thomas SIMON</string>
+    <string name="about_author_title">Authors and acknowledgements</string>
+    <string name="about_author_body">RemoteCam development: Paweł Kasztelan (Desseres). Copyright © 2026 for modifications and additions.\n\nBuilt on the original RemoteCam by Thomas SIMON (Ruddle), copyright © 2023. Thank you for sharing the original app freely with everyone.\n\nOriginal repository: Ruddle/RemoteCam</string>
     <string name="about_original_project">View original project</string>
     <string name="about_free_title">Free. Open source. MIT.</string>
     <string name="about_free_body">RemoteCam remains free and open source under the MIT license. No ads, subscriptions or paid feature unlocks. The original copyright and license are preserved.</string>

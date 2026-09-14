@@ -1,7 +1,8 @@
 # H.265 + WebRTC — tryb eksperymentalny
 
-Wersja rozwojowa **0.3.3-h265.1** (`versionCode` 18) dodaje trzeci format:
-**H.265 + WebRTC (test)**. Publiczne wydanie 0.3.2 nie zawiera tej funkcji.
+Publiczna wersja testowa **0.3.3** (`versionCode` 19) zawiera trzeci format:
+**H.265 + WebRTC (test)**, wcześniej sprawdzany w 0.3.3-h265.1 (`versionCode` 18).
+Starsze publiczne wydanie 0.3.2 nie zawiera tej funkcji.
 H.264 pozostaje zalecanym formatem WebRTC. Dotychczasowe ustawienia nie przełączają
 się automatycznie na H.265; domyślny format nowej instalacji nadal jest JPEG.
 
@@ -28,7 +29,7 @@ nie potwierdza określonej oszczędności bitrate, mniejszego opóźnienia ani p
 
 ## Uruchomienie
 
-1. Zainstaluj APK **0.3.3-h265.1** i połącz telefon oraz komputer z zaufaną siecią LAN.
+1. Zainstaluj APK **0.3.3** i połącz telefon oraz komputer z zaufaną siecią LAN.
 2. W polu **Format** wybierz **H.265 + WebRTC (test)**. Wybierz rozdzielczość;
    na początek warto porównać 1920×1080 przy 12 Mb/s z H.264 w tych samych warunkach.
 3. Włącz **Stream**. Otwórz adres `http://PHONE_IP:8080/webrtc?stats=1`.
