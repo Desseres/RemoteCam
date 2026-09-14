@@ -20,6 +20,13 @@ that frame with letterboxing. A disconnected feed turns black after 1.5 seconds;
 the receiver retries automatically. **Rozłącz** removes the session camera.
 The phone's settings are not changed by the desktop application.
 
+Version **0.1.1-test** uses a warm dark-brown interface and the website's yellow
+accent (`#ffe15a`). The preview follows incoming frames (approximately 30 fps),
+converts at most one frame at a time on a worker, and never builds a display queue.
+The status bar shows separate **receive** and **preview** frame rates.
+The original 0.1.0 preview was limited to four updates per second.
+No camera-component reinstall is required when updating from 0.1.0 to 0.1.1.
+
 Windows camera privacy settings must permit desktop applications. The test
 binaries are not signed; there is no public Windows release yet. Compatibility
 with each conferencing application must be checked individually.
@@ -51,9 +58,13 @@ retry after restarting Windows. The desktop folder can then be removed.
 
 Requires Visual Studio 2022 C++ tools, Windows SDK 10.0.22000.0, and Windows 11 x64.
 Run `prepare-dependencies.ps1`, then `build.ps1` from PowerShell.
-Output: `dist/windows/RemoteCam-Desktop-0.1.0-test/`.
+Output: `dist/windows/RemoteCam-Desktop-0.1.1-test/`.
 
 - `RemoteCam.exe --self-test`: address validation and NV12 preview checks.
+- `RemoteCam.exe --preview-test PHONE_IP:8080 20`: exercise the actual WinForms
+  preview off-screen, with the registered camera; text-only `preview-result.txt`
+  reports receive/preview rates, process CPU time, pipe reads and connections.
+  Its steady-stream pass threshold is 25 fps for both receive and preview.
 - `RemoteCam.exe --smoke PHONE_IP:8080 15 --no-camera`: receive/decode check;
   writes only text counters to `smoke-result.txt`.
 - `RemoteCam.exe --smoke PHONE_IP:8080 20`: same check with the registered camera.

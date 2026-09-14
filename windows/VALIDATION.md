@@ -1,5 +1,44 @@
 # Windows prototype validation — 14 September 2026
 
+## 0.1.1 preview and performance fix
+
+The user reported stuttering specifically in the desktop preview. Code inspection
+found a 250 ms UI timer (a four-fps ceiling), a fixed delay after each camera pipe
+write, and an eight-second timer created for every small decoder pipe read.
+
+The preview now consumes the latest frame at most once, converts outside the UI
+thread with one conversion in flight, and polls at 15 ms to follow a 30 fps input.
+Camera pipe writers wake on frame publication rather than adding a delay after
+each transfer. Decoder reading uses one worker instead of scheduling tasks/timers
+per chunk. FFmpeg uses one decoder/output thread and timestamp passthrough to
+avoid frame-thread queues and synthesized catch-up frames.
+
+Using the same physical phone and H.265 stream, the real WinForms preview ran
+off-screen through its normal message loop:
+
+| Steady measurement | Receive | Preview updates | Desktop process CPU time |
+| --- | --- | --- | --- |
+| 15.00 s | 30.00 fps | 29.93 fps | 0.84 s |
+| 20.01 s | 30.03 fps | 29.78 fps | 1.67 s |
+
+The 15-second run made 42,750 raw pipe reads, demonstrating why a timer per read
+was unnecessary overhead. Preview counts are image presentations by the UI code,
+not a measurement of physical monitor scanout or phone-to-screen latency.
+
+A separate 30-second fault-injection run killed only its own go2rtc child;
+the receiver established two successful connections and resumed preview. Its
+averages, including the forced outage, were 23.73 fps received / 23.67 displayed.
+Media Foundation also returned changing NV12 camera samples during the test.
+One earlier start attempt returned Windows `MF_E_INVALIDREQUEST`; a subsequent
+run succeeded without reinstalling the component. The startup error message now
+distinguishes an unregistered component from other camera-start failures.
+
+The source DLL is unchanged and its hash matches the already installed component.
+The warm brown / yellow interface was rendered separately without camera images
+to inspect layout and contrast. Hardware decoding remains future work.
+
+## 0.1.0 initial validation
+
 Environment: Windows 11 25H2 x64 (build 26200), Honor BVL-N49 with Android 16,
 RemoteCam Android 0.3.3-h265.1. The phone used H.265 WebRTC, front camera,
 1920×1080 and a 40 Mb/s configured limit. No phone settings were changed by the

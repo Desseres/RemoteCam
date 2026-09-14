@@ -1,7 +1,7 @@
 ﻿param([switch]$NativeOnly, [switch]$SkipNative)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot
-$outDir = Join-Path $repoRoot 'dist/windows/RemoteCam-Desktop-0.1.0-test'
+$outDir = Join-Path $repoRoot 'dist/windows/RemoteCam-Desktop-0.1.1-test'
 $objDir = Join-Path $repoRoot 'build/windows-native'
 $depsDir = Join-Path $repoRoot 'build/windows-deps'
 $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
@@ -42,7 +42,7 @@ Copy-Item $ffmpeg.FullName "$outDir/ffmpeg.exe"
 Copy-Item "$depsDir/ffmpeg-origin.json" "$outDir/ffmpeg-origin.json"
 Copy-Item "$repoRoot/build/go2rtc-remotecam.exe" "$outDir/go2rtc.exe"
 @{
-    application = 'RemoteCam Desktop'; version = '0.1.0-test'; platform = 'Windows 11 x64'
+    application = 'RemoteCam Desktop'; version = '0.1.1-test'; platform = 'Windows 11 x64'
     sourceCommit = (git -C $repoRoot rev-parse HEAD)
     sourceDirty = [bool](git -C $repoRoot status --porcelain)
     builtAtUtc = [DateTime]::UtcNow.ToString('o')

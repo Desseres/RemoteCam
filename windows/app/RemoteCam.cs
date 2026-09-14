@@ -26,6 +26,24 @@ namespace RemoteCamDesktop
             if (args.Length > 0 && args[0] == "--smoke")
                 return Smoke(args).GetAwaiter().GetResult();
             if (args.Length > 0 && args[0] == "--self-test") return SelfTest();
+            if (args.Length >= 3 && args[0] == "--preview-test")
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                int result = 1;
+                using (var window = new MainWindow())
+                {
+                    window.ShowInTaskbar = false; window.StartPosition = FormStartPosition.Manual;
+                    window.Location = new Point(-32000, -32000);
+                    window.Shown += async delegate
+                    {
+                        result = await window.MeasurePreview(args[1], Int32.Parse(args[2]));
+                        window.Close();
+                    };
+                    Application.Run(window);
+                }
+                return result;
+            }
             if (args.Length == 2 && args[0] == "--render-ui")
             {
                 Application.EnableVisualStyles();
@@ -71,7 +89,7 @@ namespace RemoteCamDesktop
                     if (args.Length > 2) Int32.TryParse(args[2], out seconds);
                     await Task.Delay(Math.Max(3, seconds) * 1000);
                     long frames = receiver.Frames;
-                    log.AppendLine("frames=" + frames + " codec=" + receiver.Codec);
+                    log.AppendLine("frames=" + frames + " codec=" + receiver.Codec + " pipeReads=" + receiver.ReadCalls);
                     await receiver.Stop();
                     File.WriteAllText(logPath, log.ToString());
                     return frames >= 30 ? 0 : 2;
@@ -110,9 +128,16 @@ namespace RemoteCamDesktop
         readonly object gate = new object();
         readonly List<NamedPipeServerStream> pipes = new List<NamedPipeServerStream>();
         byte[] latest;
+        TaskCompletionSource<bool> changed = NewSignal();
+        static TaskCompletionSource<bool> NewSignal() { return new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously); }
         long published;
         readonly Stopwatch clock = Stopwatch.StartNew();
-        public void Publish(byte[] frame) { lock (gate) { latest = frame; published = clock.ElapsedMilliseconds; } }
+        public void Publish(byte[] frame)
+        {
+            TaskCompletionSource<bool> signal;
+            lock (gate) { latest = frame; published = clock.ElapsedMilliseconds; signal = changed; changed = NewSignal(); }
+            signal.TrySetResult(true);
+        }
         public byte[] Latest { get { lock (gate) return latest != null && clock.ElapsedMilliseconds - published < 1500 ? latest : null; } }
         public void Clear() { lock (gate) latest = null; }
 
@@ -156,14 +181,16 @@ namespace RemoteCamDesktop
             {
                 while (!stop.IsCancellationRequested)
                 {
-                    byte[] frame = Latest;
+                    byte[] frame;
+                    Task nextFrame;
+                    lock (gate) { frame = latest != null && clock.ElapsedMilliseconds - published < 1500 ? latest : null; nextFrame = changed.Task; }
                     if (frame != null && !Object.ReferenceEquals(frame, lastSent))
                     {
                         await pipe.WriteAsync(header, 0, header.Length, stop.Token);
                         await pipe.WriteAsync(frame, 0, frame.Length, stop.Token);
                         lastSent = frame;
                     }
-                    await Task.Delay(33, stop.Token);
+                    else await nextFrame;
                 }
             }
             catch (Exception) { }
@@ -172,7 +199,7 @@ namespace RemoteCamDesktop
         public void Dispose()
         {
             stop.Cancel();
-            lock (gate) { latest = null; foreach (var pipe in pipes) pipe.Dispose(); pipes.Clear(); }
+            lock (gate) { latest = null; changed.TrySetCanceled(); foreach (var pipe in pipes) pipe.Dispose(); pipes.Clear(); }
         }
     }
 
@@ -188,6 +215,8 @@ namespace RemoteCamDesktop
         string sessionDir;
         ProcessJob job;
         long frames;
+        long readCalls;
+        public long ReadCalls { get { return Interlocked.Read(ref readCalls); } }
         public string Codec = "—";
         string decoderError = "";
         public Action<string> Status;
@@ -263,7 +292,11 @@ namespace RemoteCamDesktop
                         throw new IOException("Windows nie uruchomił kamery w ciągu 15 s. Sprawdź instalację i uprawnienia aparatu.");
                     string line = await ready;
                     if (line == null || !line.StartsWith("READY"))
-                        throw new IOException("Kamera Windows nie wystartowała. Użyj przycisku „Zainstaluj kamerę”. " + await camera.StandardError.ReadToEndAsync());
+                    {
+                        string details = await camera.StandardError.ReadToEndAsync();
+                        string help = details.Contains("80040154") ? "Użyj przycisku „Zainstaluj kamerę”. " : "Zakończ poprzednią sesję RemoteCam i spróbuj połączyć ponownie. ";
+                        throw new IOException("Kamera Windows nie wystartowała. " + help + details);
+                    }
                     DrainErrors(camera, false);
                     Report("Kamera RemoteCam jest dostępna w Windows.");
                 }
@@ -302,7 +335,9 @@ namespace RemoteCamDesktop
                     }
                     Report("Łączenie z telefonem… Włącz Stream i tryb WebRTC.");
                     decoderError = "";
-                    string args = "-hide_banner -loglevel info -nostdin -rtsp_transport tcp -timeout 5000000 -fflags nobuffer -flags low_delay -probesize 1000000 -analyzeduration 1000000 -i rtsp://127.0.0.1:" + rtsp + "/phone -an -sn -dn -vf \"scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1\" -pix_fmt nv12 -f rawvideo pipe:1";
+                    // One decoder/output thread prevents frame-thread queues from
+                    // adding latency. Never synthesize frames to catch up with a clock.
+                    string args = "-hide_banner -loglevel info -nostdin -rtsp_transport tcp -timeout 5000000 -fflags nobuffer -flags low_delay -threads 1 -probesize 1000000 -analyzeduration 1000000 -i rtsp://127.0.0.1:" + rtsp + "/phone -an -sn -dn -filter_threads 1 -vf \"scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1\" -pix_fmt nv12 -threads:v 1 -fps_mode passthrough -f rawvideo pipe:1";
                     decoder = Launch("ffmpeg.exe", args, false);
                     DrainErrors(decoder, true);
                     var output = decoder.StandardOutput.BaseStream;
@@ -313,10 +348,13 @@ namespace RemoteCamDesktop
                         int offset = 0;
                         while (offset < frame.Length)
                         {
-                            Task<int> read = output.ReadAsync(frame, offset, frame.Length - offset, token);
-                            if (await Task.WhenAny(read, Task.Delay(8000, token)) != read)
-                                throw new IOException("Telefon przestał wysyłać obraz.");
-                            int count = await read;
+                            // This loop already runs on a worker. Anonymous pipes use
+                            // small reads; scheduling a Task and an uncancelled timer
+                            // for every chunk caused thousands of pending timers.
+                            // FFmpeg's socket timeout and Stop() killing its process
+                            // unblock this read on network loss or cancellation.
+                            int count = output.Read(frame, offset, frame.Length - offset);
+                            Interlocked.Increment(ref readCalls);
                             if (count == 0) throw new IOException("Połączenie wideo zostało przerwane. " + decoderError);
                             offset += count;
                         }
@@ -432,6 +470,15 @@ namespace RemoteCamDesktop
 
     sealed class MainWindow : Form
     {
+        [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            int dark = 1, caption = 28 | (24 << 8) | (21 << 16), ink = 255 | (225 << 8) | (90 << 16);
+            DwmSetWindowAttribute(Handle, 20, ref dark, sizeof(int));
+            DwmSetWindowAttribute(Handle, 35, ref caption, sizeof(int));
+            DwmSetWindowAttribute(Handle, 36, ref ink, sizeof(int));
+        }
         readonly TextBox address = new TextBox();
         readonly Button connect = new Button(), install = new Button();
         readonly Label status = new Label(), metrics = new Label();
@@ -440,32 +487,51 @@ namespace RemoteCamDesktop
         readonly string settings = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RemoteCam", "desktop-address.txt");
         Receiver receiver;
         bool busy, closing;
+        bool renderingPreview;
+        byte[] lastPreviewFrame;
+        long presentedFrames, previousPresented, previousReceived;
+        readonly Stopwatch metricsClock = Stopwatch.StartNew();
+        long previousMetricTime;
         public MainWindow()
         {
-            Text = "RemoteCam Desktop · wersja testowa 0.1.0";
+            Text = "RemoteCam Desktop · wersja testowa 0.1.1";
             ClientSize = new Size(900, 700); MinimumSize = new Size(740, 620);
             StartPosition = FormStartPosition.CenterScreen;
-            BackColor = Color.FromArgb(17, 23, 34); ForeColor = Color.White;
+            // Website accent (#ffe15a), paired with the requested warm dark brown.
+            var background = Color.FromArgb(28, 24, 21);
+            var panel = Color.FromArgb(40, 34, 29);
+            var accent = Color.FromArgb(255, 225, 90);
+            var ink = Color.FromArgb(243, 242, 237);
+            var muted = Color.FromArgb(181, 171, 157);
+            BackColor = background; ForeColor = ink;
             Font = new Font("Segoe UI", 10);
-            var title = new Label { Text = "Telefon jako kamera Windows", Font = new Font("Segoe UI", 22, FontStyle.Bold), Dock = DockStyle.Top, Height = 58, Padding = new Padding(20, 12, 0, 0) };
-            var help = new Label { Text = "Włącz Stream w RemoteCam na telefonie i wybierz H.264 lub H.265 + WebRTC.", Dock = DockStyle.Top, Height = 40, Padding = new Padding(22, 5, 0, 0) };
+            var title = new Label { Text = "RemoteCam · Twoja kamera Windows", ForeColor = accent, Font = new Font("Segoe UI", 22, FontStyle.Bold), Dock = DockStyle.Top, Height = 58, Padding = new Padding(20, 12, 0, 0) };
+            var help = new Label { Text = "Włącz Stream w RemoteCam na telefonie i wybierz H.264 lub H.265 + WebRTC.", ForeColor = muted, Dock = DockStyle.Top, Height = 40, Padding = new Padding(22, 5, 0, 0) };
             var connection = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(22, 5, 0, 0) };
             address.Width = 330; address.Text = File.Exists(settings) ? File.ReadAllText(settings) : "192.168.1.11:8080";
+            address.BackColor = panel; address.ForeColor = ink; address.BorderStyle = BorderStyle.FixedSingle;
             connect.Text = "Połącz"; connect.Width = 130; connect.Height = 32;
             install.Text = "Zainstaluj kamerę"; install.Width = 170; install.Height = 32;
-            foreach (Button b in new[] {connect, install}) { b.FlatStyle = FlatStyle.Flat; b.BackColor = Color.FromArgb(37, 90, 165); }
+            foreach (Button b in new[] {connect, install}) { b.FlatStyle = FlatStyle.Flat; b.Cursor = Cursors.Hand; b.FlatAppearance.BorderColor = Color.FromArgb(86, 73, 51); }
+            connect.BackColor = accent; connect.ForeColor = background; connect.Font = new Font(Font, FontStyle.Bold);
+            connect.FlatAppearance.BorderColor = accent; connect.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 233, 129);
+            install.BackColor = panel; install.ForeColor = ink; install.FlatAppearance.MouseOverBackColor = Color.FromArgb(57, 47, 37);
             connection.Controls.AddRange(new Control[] {address, connect, install});
-            preview.Dock = DockStyle.Fill; preview.BackColor = Color.FromArgb(8, 12, 20); preview.SizeMode = PictureBoxSizeMode.Zoom;
-            var footer = new Panel { Dock = DockStyle.Bottom, Height = 170, Padding = new Padding(20) };
+            preview.Dock = DockStyle.Fill; preview.BackColor = Color.FromArgb(17, 14, 12); preview.SizeMode = PictureBoxSizeMode.Zoom;
+            var footer = new Panel { Dock = DockStyle.Bottom, Height = 170, Padding = new Padding(20), BackColor = panel };
             string registered = Microsoft.Win32.Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{D168A389-283B-4AD8-ACB4-1CC943368FA0}\InprocServer32", "", null) as string;
             status.Text = registered != null && File.Exists(registered) ? "Kamera zainstalowana. Włącz Stream na telefonie i kliknij Połącz." : "Gotowy. Przy pierwszym uruchomieniu zainstaluj kamerę."; status.Dock = DockStyle.Top; status.Height = 45;
-            metrics.Dock = DockStyle.Top; metrics.Height = 25;
-            var instructions = new Label { Text = "W OBS: Urządzenie do przechwytywania wideo → RemoteCam (wirtualna kamera Windows).\nTa wersja udostępnia obraz. Mikrofon wybierz osobno w programie odbiorczym.", Dock = DockStyle.Bottom, Height = 52, ForeColor = Color.Silver };
+            metrics.Dock = DockStyle.Top; metrics.Height = 25; metrics.ForeColor = accent;
+            var instructions = new Label { Text = "W OBS: Urządzenie do przechwytywania wideo → RemoteCam (wirtualna kamera Windows).\nTa wersja udostępnia obraz. Mikrofon wybierz osobno w programie odbiorczym.", Dock = DockStyle.Bottom, Height = 52, ForeColor = muted };
             footer.Controls.Add(instructions); footer.Controls.Add(metrics); footer.Controls.Add(status);
             Controls.Add(preview); Controls.Add(footer); Controls.Add(connection); Controls.Add(help); Controls.Add(title);
             connect.Click += async delegate { await Toggle(); };
             install.Click += async delegate { await Install(); };
-            timer.Interval = 250; timer.Tick += delegate { RefreshPreview(); }; timer.Start();
+            // Poll more often than the 30 fps input to avoid WinForms timer
+            // granularity turning a nominal 33 ms interval into roughly 20 fps.
+            // Unchanged frames are skipped, with at most one conversion in flight.
+            timer.Interval = 15; timer.Tick += async delegate { await RefreshPreview(); }; timer.Start();
+            FormClosed += delegate { timer.Dispose(); if (preview.Image != null) { preview.Image.Dispose(); preview.Image = null; } };
             FormClosing += async delegate(object sender, FormClosingEventArgs e)
             {
                 if (closing) return;
@@ -480,6 +546,33 @@ namespace RemoteCamDesktop
         {
             if (!IsDisposed && IsHandleCreated) BeginInvoke((Action)delegate { status.Text = value; });
         }
+        public async Task<int> MeasurePreview(string phone, int seconds)
+        {
+            string resultPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "preview-result.txt");
+            int connections = 0;
+            try
+            {
+                receiver = new Receiver(); receiver.Status = delegate(string message) { if (message.StartsWith("Połączono")) Interlocked.Increment(ref connections); Report(message); };
+                await receiver.Start(phone, true);
+                var ready = Stopwatch.StartNew();
+                while (presentedFrames == 0 && ready.ElapsedMilliseconds < 15000) await Task.Delay(50);
+                if (presentedFrames == 0) throw new IOException("No preview frame arrived within 15 seconds.");
+                long firstReceived = receiver.Frames, firstPresented = presentedFrames;
+                long firstReads = receiver.ReadCalls;
+                TimeSpan cpu = Process.GetCurrentProcess().TotalProcessorTime;
+                var measure = Stopwatch.StartNew();
+                await Task.Delay(Math.Max(3, seconds) * 1000);
+                double elapsed = measure.Elapsed.TotalSeconds;
+                double receiveFps = (receiver.Frames - firstReceived) / elapsed;
+                double previewFps = (presentedFrames - firstPresented) / elapsed;
+                File.WriteAllText(resultPath, String.Format(System.Globalization.CultureInfo.InvariantCulture,
+                    "codec={0}\nseconds={1:F2}\nreceiveFps={2:F2}\npreviewFps={3:F2}\nprocessCpuSeconds={4:F2}\npipeReads={5}\nconnections={6}\n",
+                    receiver.Codec, elapsed, receiveFps, previewFps, (Process.GetCurrentProcess().TotalProcessorTime - cpu).TotalSeconds, receiver.ReadCalls - firstReads, connections));
+                return receiveFps >= 25 && previewFps >= 25 ? 0 : 2;
+            }
+            catch (Exception e) { File.WriteAllText(resultPath, e.ToString()); return 1; }
+            finally { if (receiver != null) { await receiver.Stop(); receiver.Dispose(); receiver = null; } }
+        }
         async Task Toggle()
         {
             if (busy) return;
@@ -490,6 +583,9 @@ namespace RemoteCamDesktop
                 {
                     Receiver.PhoneUri(address.Text);
                     receiver = new Receiver(); receiver.Status = Report;
+                    previousReceived = previousPresented = presentedFrames = 0;
+                    previousMetricTime = metricsClock.ElapsedMilliseconds;
+                    lastPreviewFrame = null;
                     await receiver.Start(address.Text, true);
                     Directory.CreateDirectory(Path.GetDirectoryName(settings)); File.WriteAllText(settings, address.Text);
                     connect.Text = "Rozłącz"; address.Enabled = false;
@@ -524,12 +620,35 @@ namespace RemoteCamDesktop
             catch (Exception e) { status.Text = "Instalacja nie została ukończona: " + e.Message; }
             finally { install.Enabled = true; }
         }
-        void RefreshPreview()
+        async Task RefreshPreview()
         {
-            byte[] frame = receiver == null ? null : receiver.Latest;
-            Image next = frame == null ? null : Preview.Create(frame);
-            Image old = preview.Image; preview.Image = next; if (old != null) old.Dispose();
-            metrics.Text = receiver == null ? "" : receiver.Codec + " · odebrane klatki: " + receiver.Frames;
+            if (renderingPreview || closing || IsDisposed) return;
+            var active = receiver;
+            byte[] frame = active == null ? null : active.Latest;
+            long now = metricsClock.ElapsedMilliseconds;
+            if (now - previousMetricTime >= 1000)
+            {
+                long received = active == null ? 0 : active.Frames;
+                double seconds = (now - previousMetricTime) / 1000.0;
+                metrics.Text = active == null ? "" : String.Format("{0} · odbiór: {1:F0} kl./s · podgląd: {2:F0} kl./s",
+                    active.Codec, (received - previousReceived) / seconds, (presentedFrames - previousPresented) / seconds);
+                previousReceived = received; previousPresented = presentedFrames; previousMetricTime = now;
+            }
+            if (Object.ReferenceEquals(frame, lastPreviewFrame)) return;
+            if (frame == null)
+            {
+                Image old = preview.Image; preview.Image = null; if (old != null) old.Dispose();
+                lastPreviewFrame = null; return;
+            }
+            renderingPreview = true;
+            try
+            {
+                Bitmap next = await Task.Run(delegate { return Preview.Create(frame); });
+                if (closing || IsDisposed || receiver != active || active.Latest == null) { next.Dispose(); return; }
+                Image old = preview.Image; preview.Image = next; if (old != null) old.Dispose();
+                lastPreviewFrame = frame; presentedFrames++;
+            }
+            finally { renderingPreview = false; }
         }
     }
 }
