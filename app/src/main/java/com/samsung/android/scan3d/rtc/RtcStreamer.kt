@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Matrix
 import android.hardware.display.DisplayManager
 import android.media.MediaCodecInfo
-import android.media.MediaCodecList
 import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
@@ -54,6 +53,7 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
     private var audioEpoch = 0
     private var surface: Surface? = null
     private var bitrate = 12_000_000
+    private var codec = RtcVideoCodec.H264
     @Volatile private var rotationDegrees = -1
     private var disposed = false
     @Volatile var enabled = false
@@ -65,16 +65,18 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
         initializeLibrary(context)
         val shared = EglBase.create()
         egl = shared
-        // Baseline H.264 avoids frame reordering. Never silently substitute a software encoder.
+        // Preserve baseline H.264; HEVC uses the SDK's hardware encoder with the same
+        // real-time capture path. Never substitute a software encoder or another codec.
         val hardware = HardwareVideoEncoderFactory(shared.eglBaseContext, false, false) { info ->
-            supports(info, size)
+            supports(info, size, codec)
         }
-        val h264 = object : VideoEncoderFactory {
-            override fun getSupportedCodecs() = hardware.supportedCodecs.filter { it.name == "H264" }.toTypedArray()
+        val selectedCodec = codec
+        val selectedEncoder = object : VideoEncoderFactory {
+            override fun getSupportedCodecs() = hardware.supportedCodecs.filter { it.name == selectedCodec.sdpName }.toTypedArray()
             override fun createEncoder(info: VideoCodecInfo): VideoEncoder? =
-                if (info.name == "H264") hardware.createEncoder(info)?.let(::PeriodicKeyFrameEncoder) else null
+                if (info.name == selectedCodec.sdpName) hardware.createEncoder(info)?.let(::PeriodicKeyFrameEncoder) else null
         }
-        check(h264.supportedCodecs.isNotEmpty()) { "No hardware H.264 encoder supports this resolution. Select JPEG or another resolution." }
+        check(selectedEncoder.supportedCodecs.isNotEmpty()) { "No hardware ${codec.label} WebRTC encoder supports this resolution. Select another format or resolution." }
         val epoch = ++audioEpoch
         fun recordError(message: String) { handler.post {
             if (epoch == audioEpoch && !disposed) {
@@ -101,13 +103,13 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
                 } }
             }).createAudioDeviceModule()
         audioDevice!!.setMicrophoneMute(true)
-        factory = PeerConnectionFactory.builder().setAudioDeviceModule(audioDevice).setVideoEncoderFactory(h264)
+        factory = PeerConnectionFactory.builder().setAudioDeviceModule(audioDevice).setVideoEncoderFactory(selectedEncoder)
             .setVideoDecoderFactory(HardwareVideoDecoderFactory(shared.eglBaseContext)).createPeerConnectionFactory()
     }
 
     /** Called on the camera worker after closing its previous capture session. */
     fun startCapture(size: Size, limitMbps: Int, sensorOrientation: Int, frontFacing: Boolean,
-                     manualRotation: Int,
+                     manualRotation: Int, videoCodec: RtcVideoCodec = RtcVideoCodec.H264,
                      onFrame: () -> Unit): Surface = runBlocking(dispatcher) {
         check(!disposed)
         stopCaptureInternal()
@@ -115,6 +117,7 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
         factory?.dispose(); factory = null
         audioDevice?.release(); audioDevice = null
         egl?.release(); egl = null
+        codec = videoCodec
         initialize(size)
         bitrate = limitMbps * 1_000_000
         setRotation(manualRotation)
@@ -221,7 +224,12 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
     override suspend fun openHttp(offer: String): RtcSession = openPeer(offer, {}, true)
     private suspend fun openPeer(offer: String, emit: (String) -> Unit, gatherOnce: Boolean): RtcSession = withContext(dispatcher) {
         val wantsAudio = ReceiveOffer.validate(offer)
-        check(enabled && track != null && !disposed) { "Select H.264 + WebRTC and enable Stream on the phone." }
+        check(enabled && track != null && !disposed) { "Select a WebRTC format and enable Stream on the phone." }
+        check(codec.isInActiveVideo(offer)) {
+            "Receiver does not offer the selected ${codec.label} codec. " +
+                if (codec == RtcVideoCodec.H265) "Select H.264 + WebRTC on the phone or use an HEVC-capable receiver."
+                else "Use an H.264-capable receiver."
+        }
         check(peers.size < 4) { "Maximum of four WebRTC receivers reached." }
         val peer = Peer(emit)
         // Also covers cancellation while the completed peer is being returned to the HTTP worker.
@@ -245,7 +253,9 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
                     .forEach { it.setCodecPreferences(opus).throwError() }
             }
             val answer = peer.createAnswer()
-            check(answer.description.contains("H264/90000", ignoreCase = true)) { "Receiver did not negotiate H.264." }
+            check(codec.isInActiveVideo(answer.description, sending = true)) {
+                "Receiver did not negotiate ${codec.label}. Select H.264 + WebRTC or another receiver."
+            }
             peer.setDescription(answer, true)
             peer.answer = answer.description
             peer.configureSender()
@@ -409,14 +419,21 @@ class RtcStreamer(private val context: Context) : RtcSignaling {
                 }
             }
         }
-        private fun supports(info: MediaCodecInfo, size: Size): Boolean = runCatching {
-            info.isEncoder && info.supportedTypes.any { it.equals("video/avc", true) } &&
+        private fun supports(info: MediaCodecInfo, size: Size, codec: RtcVideoCodec): Boolean = runCatching {
+            info.isEncoder && info.supportedTypes.any { it.equals(codec.mimeType, true) } &&
                 (if (Build.VERSION.SDK_INT >= 29) info.isHardwareAccelerated else info.name.startsWith("OMX.qcom.") || info.name.startsWith("OMX.Exynos.")) &&
-                info.getCapabilitiesForType("video/avc").videoCapabilities?.areSizeAndRateSupported(size.width, size.height, 30.0) == true
+                info.getCapabilitiesForType(codec.mimeType).let { capabilities ->
+                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface in capabilities.colorFormats &&
+                        capabilities.videoCapabilities?.areSizeAndRateSupported(size.width, size.height, 30.0) == true
+                }
         }.getOrDefault(false)
-        fun supportedSizes(sizes: List<Size>): List<Size> {
-            val codecs = MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos
-            return sizes.filter { size -> codecs.any { supports(it, size) } }
+        fun supportedSizes(sizes: List<Size>, codec: RtcVideoCodec = RtcVideoCodec.H264): List<Size> {
+            // Use the SDK's own availability checks too (color formats, device exclusions),
+            // so MediaCodec-only support cannot advertise an unusable WebRTC mode.
+            return sizes.filter { size -> runCatching {
+                HardwareVideoEncoderFactory(null, false, false) { supports(it, size, codec) }
+                    .supportedCodecs.any { it.name == codec.sdpName }
+            }.getOrDefault(false) }
         }
     }
 }

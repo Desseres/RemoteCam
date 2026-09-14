@@ -90,7 +90,12 @@ Android implementation.
 
 ## Updated for modern Android
 
-The current test version is **0.3.2**:
+The published test version is **0.3.2**. This development checkout is
+**0.3.3-h265.1**, adding an optional **H.265 + WebRTC (test)** format. The 0.3.2
+download above does not include H.265. See the [HEVC testing guide](docs/h265-testing.md)
+for building, compatibility checks and the remaining device tests.
+
+The modernized application includes:
 
 - **Android 17 / API 37** compile and target SDK, with Android 9 / API 28 as the minimum.
 - Updated build tools: **Android Gradle Plugin 9.4.0**, **Gradle 9.7.1** and Java 17 bytecode.
@@ -269,7 +274,10 @@ OBS/go2rtc setup and testing. A separate PC microphone still needs its own OBS s
 
 **JPEG mode** streams independent JPEG frames through either `/view` or
 `/cam.mjpeg`. **H.264 + WebRTC mode** sends camera textures directly to a hardware
-H.264 encoder, without an intermediate JPEG conversion. H.265 is not implemented.
+H.264 encoder, without an intermediate JPEG conversion. Development builds also
+offer **H.265 + WebRTC (test)** through the same hardware capture path, using
+`/webrtc` and `/whep`. It requires a compatible hardware HEVC encoder and receiver;
+there is no silent fallback to H.264. JPEG/MJPEG remain separate video-only modes.
 
 WebRTC offers resolutions supported by both the selected camera and a hardware
 H.264 encoder at 30 fps. Its bitrate limit is adjustable from 2 to 40 Mb/s per

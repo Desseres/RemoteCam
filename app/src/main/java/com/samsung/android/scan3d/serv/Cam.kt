@@ -28,7 +28,7 @@ class Cam : Service() {
     fun configure(config: CameraConfig) {
         val allowed = CameraSettings(this).hasMicrophonePermission()
         val selected = config.copy(audioEnabled = config.audioEnabled && allowed)
-        if (selected.stream && selected.mode == StreamMode.WEBRTC && selected.audioEnabled && !microphoneForeground)
+        if (selected.stream && selected.mode.isWebRtc && selected.audioEnabled && !microphoneForeground)
             promoteForeground(true)
         engine.configure(selected)
     }

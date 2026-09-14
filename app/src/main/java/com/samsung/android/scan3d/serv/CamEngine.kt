@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.Executor
 import org.webrtc.VideoSink
 
-enum class StreamMode { JPEG, WEBRTC }
 data class CameraConfig(
     val cameraId: String = "", val resolution: Size? = null,
     val quality: Int = 80, val preview: Boolean = true, val stream: Boolean = false,
@@ -116,7 +115,7 @@ class CamEngine(context: Context, private val http: HttpService) {
                     preview = selected.preview, audioEnabled = selected.audioEnabled, audioMuted = selected.audioMuted) == selected &&
                 (selected.stream || previous.preview == selected.preview)) {
                 settings.save(selected)
-                rtc.setAudio(selected.stream && selected.mode == StreamMode.WEBRTC && selected.audioEnabled, selected.audioMuted)
+                rtc.setAudio(selected.stream && selected.mode.isWebRtc && selected.audioEnabled, selected.audioMuted)
                 if (previous.bitrateMbps != selected.bitrateMbps) rtc.setBitrate(selected.bitrateMbps)
                 rtc.setRotation(selected.rotationDegrees)
                 if (previous.rotationDegrees != selected.rotationDegrees) updateJpegOrientation()
@@ -168,9 +167,14 @@ class CamEngine(context: Context, private val http: HttpService) {
             cameraCharacteristics = c
             val map = c.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
             val sizes = (if (config.mode == StreamMode.JPEG) map?.getOutputSizes(ImageFormat.JPEG)?.toList().orEmpty()
-                else RtcStreamer.supportedSizes(map?.getOutputSizes(SurfaceTexture::class.java)?.toList().orEmpty()))
+                else RtcStreamer.supportedSizes(map?.getOutputSizes(SurfaceTexture::class.java)?.toList().orEmpty(), checkNotNull(config.mode.rtcCodec)))
                 .sortedBy { it.width.toLong() * it.height }
-            check(sizes.isNotEmpty()) { "No supported output sizes for this mode. Select JPEG or another camera." }
+            mutableStatus.value = mutableStatus.value.copy(sizes = sizes)
+            check(sizes.isNotEmpty()) {
+                if (config.mode == StreamMode.WEBRTC_H265)
+                    "H.265 test mode is unavailable for this camera: no compatible hardware HEVC WebRTC encoder at 30 fps. Select H.264 + WebRTC or JPEG."
+                else "No supported output sizes for this mode. Select JPEG or another camera."
+            }
             val size = config.resolution?.takeIf { it in sizes }
                 ?: sizes.lastOrNull { it.width <= 1920 && it.height <= 1080 } ?: sizes.first()
             val controls = CameraControls.limits(c)
@@ -210,13 +214,13 @@ class CamEngine(context: Context, private val http: HttpService) {
                     }
                 } catch (e: Exception) { if (ticket == generation) fail(e) }
             }, handler)
-            val rtcSurface = if (config.mode == StreamMode.WEBRTC) rtc.startCapture(size, config.bitrateMbps,
+            val rtcSurface = if (config.mode.isWebRtc) rtc.startCapture(size, config.bitrateMbps,
                 c.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0,
                 c.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT,
-                config.rotationDegrees) {
+                config.rotationDegrees, checkNotNull(config.mode.rtcCodec)) {
                 handler.post { if (ticket == generation && !destroyed) recordFrame(0) }
             } else null
-            rtc.enabled = config.stream && config.mode == StreamMode.WEBRTC
+            rtc.enabled = config.stream && config.mode.isWebRtc
             rtc.setAudio(rtc.enabled && config.audioEnabled, config.audioMuted)
             manager.openCamera(config.cameraId, object : CameraDevice.StateCallback() {
                 override fun onOpened(device: CameraDevice) {
@@ -236,7 +240,7 @@ class CamEngine(context: Context, private val http: HttpService) {
                                             set(CaptureRequest.JPEG_QUALITY, config.quality.toByte())
                                             if (config.mode == StreamMode.JPEG)
                                                 set(CaptureRequest.JPEG_ORIENTATION, jpegOrientation(c))
-                                            if (config.mode == StreamMode.WEBRTC) {
+                                            if (config.mode.isWebRtc) {
                                                 val ranges = c.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES).orEmpty()
                                                 ranges.filter { it.upper <= 30 }.maxWithOrNull(compareBy({ it.upper }, { it.lower }))?.let {
                                                     set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, it)
