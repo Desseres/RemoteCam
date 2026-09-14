@@ -91,7 +91,11 @@ This is a preparation package; the app has not been published to Google Play.
 Website sources and the hosting update script are in `website/` and
 `scripts/publish-site.ps1`. See the [website deployment guide](docs/website.md).
 
-## Thanks to the original author
+## Authors and acknowledgements
+
+**Paweł Kasztelan ([Desseres](https://github.com/Desseres))** develops this version
+of RemoteCam, including the Android modernization, streaming improvements,
+Windows desktop application and virtual camera integration.
 
 Thank you to **Thomas SIMON ([Ruddle](https://github.com/Ruddle))**, the author of
 the [original RemoteCam](https://github.com/Ruddle/RemoteCam), for the application,
@@ -326,8 +330,9 @@ in Advanced Audio Properties. Fix variable video delay before setting an offset.
 
 ## License
 
-RemoteCam remains open source under the **[MIT License](LICENSE)**. The original
-author's copyright and license notice are preserved.
+RemoteCam remains open source under the **[MIT License](LICENSE)**.
+Copyright © 2026 Paweł Kasztelan (Desseres) for modifications and additions.
+The original work is copyright © 2023 Thomas SIMON; its notice is preserved.
 
 The bundled [WebRTC SDK](https://github.com/webrtc-sdk/android) is version
 **150.7871.01**. Its [SDK license](app/src/main/resources/licenses/WEBRTC-SDK.txt)

@@ -44,7 +44,8 @@ $versionCode = @"
 using System.Reflection;
 [assembly: AssemblyTitle("RemoteCam Desktop")]
 [assembly: AssemblyProduct("RemoteCam Desktop")]
-[assembly: AssemblyCompany("RemoteCam")]
+[assembly: AssemblyCompany("Paweł Kasztelan (Desseres)")]
+[assembly: AssemblyCopyright("Copyright © 2026 Paweł Kasztelan (Desseres)")]
 [assembly: AssemblyDescription("Phone camera for Windows - test version")]
 [assembly: AssemblyVersion("$($release.version).0")]
 [assembly: AssemblyFileVersion("$($release.version).0")]
