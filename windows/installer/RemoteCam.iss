@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.1.9"
+  #define AppVersion "0.1.10"
 #endif
 #ifndef PackageDir
   #error PackageDir is required; run windows/build-installer.ps1

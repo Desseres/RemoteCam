@@ -695,15 +695,33 @@ namespace RemoteCamDesktop
             title.Resize += delegate { badge.Left = title.ClientSize.Width - badge.Width - 24; };
             var help = new Label { Text = "Włącz Stream w RemoteCam na telefonie i wybierz H.264 lub H.265 + WebRTC.", ForeColor = muted, Dock = DockStyle.Top, Height = 40, Padding = new Padding(22, 5, 0, 0) };
             var connection = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(22, 5, 0, 0) };
-            address.Width = 330; address.Text = File.Exists(settings) ? File.ReadAllText(settings) : "192.168.1.11:8080";
-            address.BackColor = panel; address.ForeColor = ink; address.BorderStyle = BorderStyle.FixedSingle;
+            address.Text = File.Exists(settings) ? File.ReadAllText(settings) : "192.168.1.11:8080";
+            address.BackColor = panel; address.ForeColor = ink; address.BorderStyle = BorderStyle.None;
+            address.AccessibleName = "Adres IP telefonu";
+            // Keep a single-line editor, centered inside a button-height frame.
+            var addressFrame = new Panel { Width = 330, Height = 32, BackColor = panel, Padding = new Padding(8, 0, 8, 0), TabStop = false };
+            Action alignAddress = delegate {
+                address.SetBounds(addressFrame.Padding.Left, Math.Max(1, (addressFrame.ClientSize.Height - address.PreferredHeight) / 2),
+                    Math.Max(1, addressFrame.ClientSize.Width - addressFrame.Padding.Horizontal), address.PreferredHeight);
+            };
+            addressFrame.Controls.Add(address);
+            addressFrame.Resize += delegate { alignAddress(); };
+            address.FontChanged += delegate { alignAddress(); };
+            addressFrame.Paint += delegate(object sender, PaintEventArgs e) {
+                using (var pen = new Pen(address.Focused ? accent : Color.FromArgb(86, 73, 51)))
+                    e.Graphics.DrawRectangle(pen, 0, 0, addressFrame.Width - 1, addressFrame.Height - 1);
+            };
+            address.Enter += delegate { addressFrame.Invalidate(); };
+            address.Leave += delegate { addressFrame.Invalidate(); };
+            addressFrame.Click += delegate { address.Focus(); };
+            alignAddress();
             connect.Text = "Połącz"; connect.Width = 130; connect.Height = 32;
             install.Text = "Zainstaluj kamerę"; install.Width = 170; install.Height = 32;
             foreach (Button b in new[] {connect, install}) { b.FlatStyle = FlatStyle.Flat; b.Cursor = Cursors.Hand; b.FlatAppearance.BorderColor = Color.FromArgb(86, 73, 51); }
             connect.BackColor = accent; connect.ForeColor = background; connect.Font = new Font(Font, FontStyle.Bold);
             connect.FlatAppearance.BorderColor = accent; connect.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 233, 129);
             install.BackColor = panel; install.ForeColor = ink; install.FlatAppearance.MouseOverBackColor = Color.FromArgb(57, 47, 37);
-            connection.Controls.AddRange(new Control[] {address, connect, install});
+            connection.Controls.AddRange(new Control[] {addressFrame, connect, install});
             preview.Dock = DockStyle.Fill; preview.BackColor = Color.FromArgb(17, 14, 12); preview.SizeMode = PictureBoxSizeMode.Zoom;
             previewNotice.Dock = DockStyle.Fill; previewNotice.TextAlign = ContentAlignment.MiddleCenter; previewNotice.ForeColor = muted;
             previewNotice.Text = "Podgląd lokalny wyłączony.\nObraz nadal trafia do kamery Windows.";

@@ -1,5 +1,12 @@
 # Windows prototype validation — 14 September 2026
 
+## 0.1.10 address field alignment
+
+The single-line address editor is vertically centered in a 32 px frame matching
+the adjacent connection buttons, with inset text and a focus border. The normal
+window render (`--render-ui`, exit 0) was visually checked: top and bottom edges
+align and the address remains legible. No connection logic changed.
+
 ## 0.1.9 microphone layout
 
 Reproduced the overlapping device selector and buttons with `--render-audio`.

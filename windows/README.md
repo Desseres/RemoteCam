@@ -12,7 +12,7 @@ notices are available locally, including when the computer is offline.
 
 ## Install (recommended)
 
-Run **RemoteCam-Desktop-0.1.9-test-Setup.exe** on Windows 11 x64 and accept
+Run **RemoteCam-Desktop-0.1.10-test-Setup.exe** on Windows 11 x64 and accept
 the administrator prompt. This single, offline installer includes the application,
 decoder, relay and camera component. It creates a Start menu shortcut and offers
 an optional desktop shortcut. No separate camera-registration script is needed.
@@ -167,11 +167,11 @@ retry after restarting Windows. The desktop folder can then be removed.
 Requires Visual Studio 2022 C++ tools, Windows SDK 10.0.22000.0, and Windows 11 x64.
 Run `prepare-dependencies.ps1`, then `build.ps1` from PowerShell.
 Also run `prepare-audio.ps1` once for the verified NAudio/VB-CABLE dependencies.
-Output: `dist/windows/RemoteCam-Desktop-0.1.9-test/`.
+Output: `dist/windows/RemoteCam-Desktop-0.1.10-test/`.
 
 For the single EXE installer, run `prepare-installer.ps1` once to download and
 verify the pinned Inno Setup 6.7.3 compiler, then run `build-installer.ps1`.
-Output: `dist/windows/RemoteCam-Desktop-0.1.9-test-Setup.exe`, with a SHA-256 sidecar.
+Output: `dist/windows/RemoteCam-Desktop-0.1.10-test-Setup.exe`, with a SHA-256 sidecar.
 Pass `-Iscc PATH` to use an existing compiler, or `-SkipAppBuild` to package an
 already built app. Version and channel are in `version.json` (installer is test-only).
 The installer uses Windows' normal elevation prompt to register the camera in
