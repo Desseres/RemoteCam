@@ -7,6 +7,9 @@ pakiety i ich sumy SHA-256; instrukcja Desktop opisuje połączenie, OBS, tray i
 Android na stronie pozostaje w opublikowanej wersji **0.3.2**, zgodnej z H.264.
 Strona PL/EN została sprawdzona lokalnie przy 320, 390 i 1440 px, w tym galeria,
 brak poziomego przepełnienia i zgodność sumy pobieranego APK.
+Po publikacji przez FTPS powtórzono te kontrole na publicznej stronie; polityka
+prywatności zwróciła HTTP 200 z nagłówkiem CSP. Pobieranie EXE z GitHuba bez
+logowania przeszło weryfikację SHA-256 względem pliku dołączonego do wydania.
 
 Strona została opublikowana i sprawdzona 2026-09-12 pod **https://remotecam.kasztelan.me/**.
 Aktualny pakiet na stronie: **0.3.2 (17)**, podpisany dotychczasowym kluczem wydania.
