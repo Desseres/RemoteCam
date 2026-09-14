@@ -6,8 +6,9 @@
 
 **Your Android camera on your computer. Free, without ads or paid feature unlocks. Open source under the MIT license.**
 
-[**Download test APK 0.3.2**](https://github.com/Desseres/RemoteCam/releases/download/v0.3.2/RemoteCam-0.3.2.apk)
-· [Release notes & checksums](https://github.com/Desseres/RemoteCam/releases/tag/v0.3.2)
+[**Android APK 0.3.3**](https://github.com/Desseres/RemoteCam/releases/download/v0.3.3/RemoteCam-0.3.3.apk)
+· [**Windows EXE 0.1.10**](https://github.com/Desseres/RemoteCam/releases/download/v0.3.3/RemoteCam-Desktop-0.1.10-test-Setup.exe)
+· [Combined test release & checksums](https://github.com/Desseres/RemoteCam/releases/tag/v0.3.3)
 · [Website (PL / EN)](https://remotecam.kasztelan.me/)
 · [Report an issue](https://github.com/Desseres/RemoteCam/issues)
 
@@ -20,13 +21,58 @@ In a world full of ads, subscriptions and paywalls, we want this project to
 remain freely available to everyone. Download the source, build it, use it and
 make it your own. Contributions and improvements are welcome.
 
+## One release, two apps
+
+**v0.3.3 is a combined public test release.** Its assets include both applications;
+Android and Desktop retain their own version numbers.
+
+| Install on | Package | Requirements |
+| --- | --- | --- |
+| Phone | **RemoteCam 0.3.3 APK** — camera and optional microphone sender | Android 9+; compatible hardware encoder for H.264/H.265 |
+| Computer | **RemoteCam Desktop 0.1.10 EXE** — receiver and virtual camera | Windows 11 x64; administrator access for installation |
+
+Start with **H.264 + WebRTC, 1920 × 1080, 30 fps**. H.265 is an additional
+experimental mode; availability depends on the phone and receiver. OBS Browser
+support is separate from Desktop decoding. AV1 is not implemented.
+
+## Windows virtual camera
+
+[RemoteCam Desktop](windows/README.md) exposes a **RemoteCam** camera to Windows
+apps, including OBS's **Video Capture Device** source. It outputs 1080p30,
+decodes H.264/H.265 using the GPU when available (with CPU fallback), and retries
+interrupted streams. The hardware panel provides measured quality guidance.
+
+1. Install the EXE from the [combined release](https://github.com/Desseres/RemoteCam/releases/tag/v0.3.3).
+2. Start **H.264 + WebRTC / Stream** on the phone, on the same trusted LAN.
+3. Enter `PHONE_IP:8080` in Desktop and click **Połącz** (Connect).
+4. In OBS, add **Video Capture Device → RemoteCam**.
+
+Closing or minimizing the window keeps the receiver running in the system tray
+and suspends local preview rendering. Choose **Zakończ** (Exit) in the tray to
+stop it. Desktop must remain running; it is not a Windows service.
+
+Phone audio is optional and off by default. The **Mikrofon** tab routes it through
+the separately installed **VB-CABLE** driver. In OBS, add **Audio Input Capture →
+CABLE Output**, or its custom name, and turn monitoring off. Mute any open browser
+preview to avoid duplicate audio. Your physical microphone remains a separate
+source. VB-CABLE has its own donationware license; it is not covered by MIT.
+
+The Desktop UI is in Polish. The installer is unsigned; release assets include
+SHA-256 checksums. See [installation and audio details](windows/README.md) and
+[validation results](windows/VALIDATION.md).
+
+<p align="center">
+  <img src="windows/assets/screenshots/desktop-info.png" alt="RemoteCam Desktop 0.1.10 with the dark interface, Preview, Hardware, Microphone and Information tabs" width="820">
+</p>
+<p align="center"><em>Actual Desktop 0.1.10 interface, shown without an active stream.</em></p>
+
 ## Install the test version
 
-**0.3.2 is a public prerelease for testing**, distributed as a signed release APK
+**0.3.3 is a public prerelease for testing**, distributed as a signed release APK
 (about 61 MiB). It requires **Android 9 or newer**. You can install it directly;
 Android Studio and a computer are not required for installation.
 
-1. On your phone, [download RemoteCam-0.3.2.apk](https://github.com/Desseres/RemoteCam/releases/download/v0.3.2/RemoteCam-0.3.2.apk).
+1. On your phone, [download RemoteCam-0.3.3.apk](https://github.com/Desseres/RemoteCam/releases/download/v0.3.3/RemoteCam-0.3.3.apk).
 2. Open the downloaded file. If Android asks, allow **Install unknown apps** for
    the browser or file manager you used, then complete installation.
 3. Connect the phone and computer to the same trusted local network. Open
@@ -39,7 +85,7 @@ Android Studio and a computer are not required for installation.
 JPEG Browser and MJPEG are also available for video-only receivers. See
 [OBS setup](#use-with-obs) and the [audio guide](docs/webrtc-audio.md) for details.
 
-Updating release 0.3.1 with the same `pl.remotecam.app` package and signing key
+Updating release 0.3.1, 0.3.2 or the signed H.265 test build with the same `pl.remotecam.app` package and signing key
 preserves settings. A debug build with that package has a different signature;
 switching to release requires uninstalling it, which deletes its settings.
 Older packages with a different application ID install alongside this version.
@@ -80,7 +126,11 @@ This is a preparation package; the app has not been published to Google Play.
 Website sources and the hosting update script are in `website/` and
 `scripts/publish-site.ps1`. See the [website deployment guide](docs/website.md).
 
-## Thanks to the original author
+## Authors and acknowledgements
+
+**Paweł Kasztelan ([Desseres](https://github.com/Desseres))** develops this version
+of RemoteCam, including the Android modernization, streaming improvements,
+Windows desktop application and virtual camera integration.
 
 Thank you to **Thomas SIMON ([Ruddle](https://github.com/Ruddle))**, the author of
 the [original RemoteCam](https://github.com/Ruddle/RemoteCam), for the application,
@@ -90,7 +140,12 @@ Android implementation.
 
 ## Updated for modern Android
 
-The current test version is **0.3.2**:
+The current Android test version is **0.3.3**, including the optional
+**H.265 + WebRTC (test)** format previously tested in 0.3.3-h265.1. H.264 remains
+the recommended WebRTC mode. See the [HEVC testing guide](docs/h265-testing.md)
+for compatibility checks and the remaining device tests.
+
+The modernized application includes:
 
 - **Android 17 / API 37** compile and target SDK, with Android 9 / API 28 as the minimum.
 - Updated build tools: **Android Gradle Plugin 9.4.0**, **Gradle 9.7.1** and Java 17 bytecode.
@@ -143,7 +198,7 @@ ASCII path if that directory is already used by another checkout.
 Build and install your own development version using Android Studio or Android
 SDK tools. For a signed APK suitable for a GitHub Release, see the
 [release packaging and signing guide](docs/releases.md) and
-[0.3.2 release notes](docs/releases/v0.3.2.md).
+[combined 0.3.3 release notes](docs/releases/v0.3.3.md).
 
 ## Use with OBS
 
@@ -269,7 +324,10 @@ OBS/go2rtc setup and testing. A separate PC microphone still needs its own OBS s
 
 **JPEG mode** streams independent JPEG frames through either `/view` or
 `/cam.mjpeg`. **H.264 + WebRTC mode** sends camera textures directly to a hardware
-H.264 encoder, without an intermediate JPEG conversion. H.265 is not implemented.
+H.264 encoder, without an intermediate JPEG conversion. Development builds also
+offer **H.265 + WebRTC (test)** through the same hardware capture path, using
+`/webrtc` and `/whep`. It requires a compatible hardware HEVC encoder and receiver;
+there is no silent fallback to H.264. JPEG/MJPEG remain separate video-only modes.
 
 WebRTC offers resolutions supported by both the selected camera and a hardware
 H.264 encoder at 30 fps. Its bitrate limit is adjustable from 2 to 40 Mb/s per
@@ -307,8 +365,9 @@ in Advanced Audio Properties. Fix variable video delay before setting an offset.
 
 ## License
 
-RemoteCam remains open source under the **[MIT License](LICENSE)**. The original
-author's copyright and license notice are preserved.
+RemoteCam remains open source under the **[MIT License](LICENSE)**.
+Copyright © 2026 Paweł Kasztelan (Desseres) for modifications and additions.
+The original work is copyright © 2023 Thomas SIMON; its notice is preserved.
 
 The bundled [WebRTC SDK](https://github.com/webrtc-sdk/android) is version
 **150.7871.01**. Its [SDK license](app/src/main/resources/licenses/WEBRTC-SDK.txt)

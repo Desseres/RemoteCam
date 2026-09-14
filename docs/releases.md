@@ -6,6 +6,8 @@ debug do release. Skrypt poniżej podpisuje APK dopiero po jego zbudowaniu.
 
 ## Opisy wersji
 
+- [0.3.3 — wspólne wydanie Android + Windows (English)](releases/v0.3.3.md):
+  podpisane APK 0.3.3 i instalator Desktop 0.1.10 w jednym wydaniu testowym.
 - [0.3.2 — dźwięk z mikrofonu przez WebRTC](releases/v0.3.2.md): zmiany,
   konfiguracja OBS i go2rtc, zgodność, wyniki testów oraz pliki do pobrania.
 - [0.3.0 — modernizacja aplikacji i transmisji](releases/v0.3.0.md).

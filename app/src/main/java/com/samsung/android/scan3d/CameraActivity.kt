@@ -265,7 +265,10 @@ class CameraActivity : AppCompatActivity() {
             transfer.outputMbps, transfer.clients, transfer.confirmedClients,
             transfer.ackMs?.let { getString(R.string.transfer_ack, it, transfer.skippedPercent) }.orEmpty())
         binding.transferFeedback.setTextColor(ContextCompat.getColor(this, color))
-        val webRtc = status.config.mode == StreamMode.WEBRTC
+        val webRtc = status.config.mode.isWebRtc
+        binding.h265Hint.visibility = if (status.config.mode == StreamMode.WEBRTC_H265) View.VISIBLE else View.GONE
+        binding.captureError.text = status.error.orEmpty()
+        binding.captureError.visibility = if (status.error != null) View.VISIBLE else View.GONE
         binding.rtcAudioPanel.visibility = if (webRtc) View.VISIBLE else View.GONE
         binding.switchAudio.isChecked = status.config.audioEnabled
         binding.switchAudioMute.isChecked = status.config.audioMuted
@@ -279,7 +282,8 @@ class CameraActivity : AppCompatActivity() {
         binding.jpegQualityRow.visibility = if (webRtc) View.GONE else View.VISIBLE
         binding.rtcBitrateRow.visibility = if (webRtc) View.VISIBLE else View.GONE
         binding.rtcRotationHint.setText(if (webRtc) R.string.rotation_hint else R.string.rotation_jpeg_hint)
-        binding.rateHint.setText(if (webRtc) R.string.rtc_rate_hint else R.string.generated_rate_hint)
+        binding.rateHint.text = if (webRtc) getString(R.string.rtc_rate_hint, status.config.mode.rtcCodec!!.label)
+            else getString(R.string.generated_rate_hint)
         if (webRtc) {
             val state = status.rtc
             val rtcColor = when {
@@ -294,7 +298,7 @@ class CameraActivity : AppCompatActivity() {
                 if (state.limitation.isEmpty()) getString(R.string.rtc_stable) else getString(R.string.rtc_adapting, state.limitation))
             binding.transferFeedback.setTextColor(ContextCompat.getColor(this, rtcColor))
         }
-        setOptions(binding.spinnerMode, listOf(getString(R.string.mode_jpeg), getString(R.string.mode_rtc)), status.config.mode.ordinal) { index ->
+        setOptions(binding.spinnerMode, listOf(getString(R.string.mode_jpeg), getString(R.string.mode_rtc), getString(R.string.mode_rtc_h265)), status.config.mode.ordinal) { index ->
             service?.engine?.let { configureCamera(it.status.value.config.copy(mode = StreamMode.entries[index])) }
         }
         setOptions(binding.spinnerBitrate, bitrates.map { getString(R.string.bitrate_option, it) }, bitrates.indexOf(status.config.bitrateMbps)) { index ->

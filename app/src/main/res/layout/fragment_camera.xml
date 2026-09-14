@@ -32,6 +32,10 @@
                 <TextView style="@style/ControlLabel" android:text="@string/stream_mode" android:labelFor="@id/spinner_mode" />
                 <Spinner android:id="@+id/spinner_mode" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" />
             </LinearLayout>
+            <TextView android:id="@+id/h265_hint" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="@string/h265_test_hint" android:textSize="12sp" android:paddingBottom="8dp" android:visibility="gone" />
+            <TextView android:id="@+id/capture_error" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textSize="14sp" android:paddingBottom="8dp" android:visibility="gone" android:accessibilityLiveRegion="polite" />
             <LinearLayout style="@style/ControlRow">
                 <TextView style="@style/ControlLabel" android:text="@string/sensor" android:labelFor="@id/spinnerCam" />
                 <Spinner android:id="@+id/spinnerCam" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" />

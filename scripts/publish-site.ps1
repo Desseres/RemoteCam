@@ -7,9 +7,10 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $source = Join-Path $projectRoot 'website'
 $staging = Join-Path $projectRoot 'build\website-preview'
-$gradle = Get-Content (Join-Path $projectRoot 'app\build.gradle') -Raw
-$version = [regex]::Match($gradle, "versionName = '([^']+)'").Groups[1].Value
-$appId = [regex]::Match($gradle, "applicationId = '([^']+)'").Groups[1].Value
+# Publish the selected public APK, even when the checkout is developing a newer version.
+$versions = @(Get-Content (Join-Path $source 'versions.json') -Raw | ConvertFrom-Json)
+$version = $versions[0].version
+$appId = $versions[0].applicationId
 if ($appId -ne 'pl.remotecam.app' -or $version -notmatch '^\d+\.\d+\.\d+$') { throw 'Unexpected application ID or version.' }
 if (!$ApkPath) { $ApkPath = "dist\google-play\$appId\$version\RemoteCam-$version.apk" }
 $apk = if ([IO.Path]::IsPathRooted($ApkPath)) { [IO.Path]::GetFullPath($ApkPath) } else { [IO.Path]::GetFullPath((Join-Path $projectRoot $ApkPath)) }
@@ -22,8 +23,6 @@ $apkName = [IO.Path]::GetFileName($apk)
 $expected = @(Get-Content -LiteralPath $checksumPath | Where-Object { $_ -match ('^[0-9a-fA-F]{64}  ' + [regex]::Escape($apkName) + '$') })
 $hash = (Get-FileHash -LiteralPath $apk -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($expected.Count -ne 1 -or $expected[0].Substring(0,64).ToLowerInvariant() -ne $hash) { throw 'APK checksum mismatch.' }
-$versions = @(Get-Content (Join-Path $source 'versions.json') -Raw | ConvertFrom-Json)
-if ($versions[0].version -ne $version) { throw 'Add the new release notes to website/versions.json before publishing.' }
 $downloadName = "RemoteCam-$appId-$version.apk"
 $versions[0].apk = "downloads/$downloadName"
 

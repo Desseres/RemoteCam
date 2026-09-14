@@ -1,0 +1,15 @@
+RemoteCam optionally uses VB-CABLE by VB-Audio / Vincent Burel.
+Origin and download: https://vb-audio.com/Cable/
+Licensing: https://vb-audio.com/Services/licensing.htm
+VB-CABLE is donationware; all participations are welcome. Users can obtain
+their license or donate directly to VB-Audio. Professional usage may require
+paid licenses under VB-Audio's terms. VB-CABLE is not covered by RemoteCam's MIT license.
+
+The original, unmodified VBCABLE_Driver_Pack45.zip is provided as an optional
+component. Its own installer and license remain intact; installation is explicitly
+initiated by the user from the Microphone page. Its original readme.txt contains
+the complete end-user license. RemoteCam never removes this shared driver on uninstall.
+
+Distribution authorization: VB-Audio licensing page, section
+"VB-CABLE Distribution with other product", consulted 14 September 2026.
+The donationware model and visible VB-Audio identification remain applicable.

@@ -10,7 +10,6 @@ import android.widget.*
 import com.samsung.android.scan3d.R
 import com.samsung.android.scan3d.http.Bandwidth
 import com.samsung.android.scan3d.serv.CameraStatus
-import com.samsung.android.scan3d.serv.StreamMode
 
 /** A compact native guide: persistent navigation, readable cards, and a scrollable body. */
 object BandwidthDialog {
@@ -75,6 +74,7 @@ object BandwidthDialog {
                     card(R.string.guide_browser_title, R.string.guide_browser_body)
                     card(R.string.guide_mjpeg_title, R.string.guide_mjpeg_body)
                     card(R.string.guide_rtc_title, R.string.guide_rtc_body, accent)
+                    card(R.string.mode_rtc_h265, R.string.h265_test_hint, accent)
                     card(R.string.guide_go2rtc_title, R.string.guide_go2rtc_body)
                     card(R.string.guide_lens_title, R.string.guide_lens_body)
                     card(R.string.rotation_label, R.string.rotation_jpeg_hint)
@@ -83,10 +83,10 @@ object BandwidthDialog {
                 1 -> {
                     val current = card(R.string.guide_current, titleColor = accent)
                     val size = status.config.resolution
-                    val webRtc = status.config.mode == StreamMode.WEBRTC
+                    val webRtc = status.config.mode.isWebRtc
                     val summary = when {
                         size == null -> context.getString(R.string.bandwidth_wait)
-                        webRtc -> context.getString(R.string.guide_rtc_current, size.width, size.height, status.config.bitrateMbps, status.rtc.mbps)
+                        webRtc -> context.getString(R.string.guide_rtc_current, size.width, size.height, status.config.bitrateMbps, status.rtc.mbps, status.config.mode.rtcCodec!!.label)
                         status.averageFrameBytes > 0 -> context.getString(R.string.bandwidth_current, size.width, size.height, status.config.quality, status.averageFrameBytes / 1000, status.fps, status.sourceMbps)
                         else -> context.getString(R.string.bandwidth_wait)
                     }

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>RemoteCam • H.264 WebRTC</title>
+<title>RemoteCam • WebRTC</title>
 <style>
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#edf2f8;font:16px system-ui}
 video{width:100%;height:100%;object-fit:contain;display:block}
@@ -11,7 +11,7 @@ video{width:100%;height:100%;object-fit:contain;display:block}
 #sound[hidden]{display:none}
 </style></head><body>
 <video id="video" autoplay playsinline muted></video>
-<div id="status" role="status"><h1>RemoteCam · H.264</h1><p id="message">Connecting to the phone…</p></div>
+<div id="status" role="status"><h1>RemoteCam · WebRTC</h1><p id="message">Connecting to the phone…</p></div>
 <output id="stats" hidden></output>
 <button id="sound" type="button" hidden>Enable sound</button>
 <script>
@@ -37,13 +37,22 @@ function connect() {
     const pc = new RTCPeerConnection({iceServers: []});
     const current = {ws, pc, stream: new MediaStream(), pending: [], localIce: [], offerSent: false, timer: null, bytes: 0, time: 0, frames: 0, lastFrame: performance.now()};
     active = current;
-    let explanation = 'Select H.264 + WebRTC and enable Stream on the phone. Reconnecting…';
+    let explanation = 'Select a WebRTC format and enable Stream on the phone. Reconnecting…';
     const incoming = pc.addTransceiver('video', {direction: 'recvonly'});
     const audio = pc.addTransceiver('audio', {direction: 'recvonly'});
     const opus = RTCRtpReceiver.getCapabilities('audio')?.codecs.filter(c => c.mimeType.toLowerCase() === 'audio/opus') || [];
     if (opus.length && audio.setCodecPreferences) audio.setCodecPreferences(opus);
-    const h264 = RTCRtpReceiver.getCapabilities('video')?.codecs.filter(c => c.mimeType.toLowerCase() === 'video/h264') || [];
-    if (h264.length && incoming.setCodecPreferences) incoming.setCodecPreferences(h264);
+    // Offer both codecs the receiver actually supports. The phone strictly selects its
+    // chosen format; an H.265 test never silently falls back to H.264. Keep repair codecs
+    // available for retransmissions rather than stripping RTX from codec preferences.
+    const capabilities = RTCRtpReceiver.getCapabilities('video')?.codecs || [];
+    const codecs = ['video/h264', 'video/h265'].flatMap(type => capabilities.filter(c => c.mimeType.toLowerCase() === type));
+    const repair = capabilities.filter(c => ['video/rtx', 'video/red', 'video/ulpfec'].includes(c.mimeType.toLowerCase()));
+    let codecError;
+    try {
+        if (!codecs.length) throw new Error('This receiver does not support H.264 or H.265 WebRTC. Use another browser or select JPEG on the phone.');
+        if (incoming.setCodecPreferences) incoming.setCodecPreferences([...codecs, ...repair]);
+    } catch (error) { codecError = error; }
     function send(text) { if (ws.readyState === WebSocket.OPEN) ws.send(text); }
     pc.onicecandidate = ({candidate: c}) => {
         if (!c) return;
@@ -74,6 +83,7 @@ function connect() {
     };
     ws.onopen = async () => {
         try {
+            if (codecError) throw codecError;
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             send('offer\n' + offer.sdp);
