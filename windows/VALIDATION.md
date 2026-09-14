@@ -1,5 +1,32 @@
 # Windows prototype validation — 14 September 2026
 
+## 0.1.4 branding and single EXE installer
+
+The WinForms app embeds the RemoteCam logo and a nine-size Windows icon
+(16–256 px). The application and installer shortcuts share the explicit
+`RemoteCam.Desktop` AppUserModelID. The rendered window and installed app were
+visually inspected: logo, wordmark, version badge and title-bar icon are visible.
+`--self-test` and `--render-ui` both exited 0; file version is 0.1.4.0.
+
+Inno Setup 6.7.3 compiled the branded, offline Windows 11 x64 installer.
+A real installation completed in `C:\Program Files\RemoteCam Desktop`, without
+a restart, and launched the app as the original user. The installed app, host,
+camera DLL, go2rtc and FFmpeg matched the build's SHA-256 hashes. The Start menu
+shortcut targets the installed app, and Windows' uninstall entry reports
+0.1.4-test. The camera registration points at the expected content-addressed DLL,
+whose hash also matches, with `ThreadingModel=Both`.
+
+The installed app connected to the physical phone with H.265/GPU and displayed
+30 fps for both reception and preview during inspection. This was a launch and
+packaging check, not a new stream-quality benchmark. The installer license and
+destination screens were visually inspected with the brown theme and yellow logo.
+
+Automatic uninstall and upgrade execution have not been exercised on this host;
+the user's installed, connected app was left running. The uninstall hook checks
+component ownership before removing its COM registration; locked component files
+are scheduled for removal on restart. The package is unsigned. Testing on a clean
+Windows 11 machine and at additional DPI settings remains pending.
+
 ## 0.1.3 high-resolution H.265 GPU decoding
 
 The user's live codec-switch test exposed a second failure after packet repair:

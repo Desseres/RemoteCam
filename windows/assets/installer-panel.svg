@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="492" height="942" viewBox="0 0 492 942">
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#30261d"/><stop offset="1" stop-color="#171411"/></linearGradient></defs>
+  <rect width="492" height="942" fill="url(#bg)"/>
+  <path d="M42 68H122" stroke="#ffe15a" stroke-width="6"/>
+  <text x="42" y="134" fill="#f3f2ed" font-family="Segoe UI, sans-serif" font-weight="700" font-size="52">RemoteCam</text>
+  <text x="44" y="177" fill="#ffe15a" font-family="Segoe UI, sans-serif" font-size="22" letter-spacing="6">DESKTOP</text>
+  <g fill="none" stroke="#ffe15a" opacity=".09"><circle cx="246" cy="484" r="260"/><circle cx="246" cy="484" r="209"/><circle cx="246" cy="484" r="158"/></g>
+  <g transform="translate(-12 238) scale(4.7)">
+    <path fill="#ffe15a" d="M31 37H40L44 31H62L66 37H77Q82 37 82 42V70Q82 75 77 75H31Q26 75 26 70V42Q26 37 31 37Z"/>
+    <circle cx="54" cy="55" r="14" fill="#241e18"/><circle cx="54" cy="55" r="8" fill="#ffe15a"/>
+    <circle cx="72" cy="45" r="3" fill="#241e18"/>
+    <path d="M72 26Q80 27 83 34M74 19Q87 21 91 32" fill="none" stroke="#ffe15a" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <path d="M42 798H450" stroke="#6c5940"/>
+  <text x="42" y="848" fill="#f3f2ed" font-family="Segoe UI, sans-serif" font-size="27">PHONE → WEBCAM</text>
+  <text x="42" y="892" fill="#b5ab9d" font-family="Segoe UI, sans-serif" font-size="20" letter-spacing="3">WINDOWS 11</text>
+</svg>

@@ -4,7 +4,24 @@ Receives the existing RemoteCam phone stream and exposes **RemoteCam Windows
 Virtual Camera** to camera applications. This is an experimental **video-only**
 companion, independent of OBS Browser Source. It does not install a virtual microphone.
 
-## Run
+## Install (recommended)
+
+Run **RemoteCam-Desktop-0.1.4-test-Setup.exe** on Windows 11 x64 and accept
+the administrator prompt. This single, offline installer includes the application,
+decoder, relay and camera component. It creates a Start menu shortcut and offers
+an optional desktop shortcut. No separate camera-registration script is needed.
+Open RemoteCam Desktop, enable Stream on the phone and connect to its HTTP address.
+
+Later installers update the same application directory. Close RemoteCam Desktop
+before updating. Uninstall through Windows Settings → Apps → Installed apps.
+Close applications using the camera first; a loaded camera DLL may require a restart
+to finish removal. The saved phone address and diagnostics are retained.
+
+Version **0.1.4-test** adds the application logo, multi-size EXE/window/taskbar icon,
+matching shortcut identity and a branded Polish/English setup wizard. Streaming
+behavior is unchanged from 0.1.3. The app interface is currently Polish.
+
+## Run the portable package
 
 1. Extract the complete package to a folder and open `RemoteCam.exe`.
 2. Click **Zainstaluj kamerę** once and accept the Windows administrator prompt.
@@ -77,7 +94,21 @@ retry after restarting Windows. The desktop folder can then be removed.
 
 Requires Visual Studio 2022 C++ tools, Windows SDK 10.0.22000.0, and Windows 11 x64.
 Run `prepare-dependencies.ps1`, then `build.ps1` from PowerShell.
-Output: `dist/windows/RemoteCam-Desktop-0.1.3-test/`.
+Output: `dist/windows/RemoteCam-Desktop-0.1.4-test/`.
+
+For the single EXE installer, run `prepare-installer.ps1` once to download and
+verify the pinned Inno Setup 6.7.3 compiler, then run `build-installer.ps1`.
+Output: `dist/windows/RemoteCam-Desktop-0.1.4-test-Setup.exe`, with a SHA-256 sidecar.
+Pass `-Iscc PATH` to use an existing compiler, or `-SkipAppBuild` to package an
+already built app. Version and channel are in `version.json` (installer is test-only).
+The installer uses Windows' normal elevation prompt to register the camera in
+HKLM64. A content-addressed DLL filename permits updates while an older camera
+component is loaded. Uninstall removes its registration only if it still points
+to that package's component.
+
+Brand assets are checked in under `assets/`, derived from the repository's
+RemoteCam icon. To regenerate PNG/ICO files after SVG edits, run
+`node windows/generate-brand-assets.cjs` with `sharp` available to Node.js.
 
 The Windows dependency build uses the cumulative
 `patches/go2rtc-1.9.14-video-repair.patch` against the pinned upstream commit.

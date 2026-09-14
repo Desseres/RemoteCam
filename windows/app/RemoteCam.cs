@@ -19,11 +19,27 @@ using System.Web.Script.Serialization;
 
 namespace RemoteCamDesktop
 {
+    static class Brand
+    {
+        public const string Version = BuildInfo.Version;
+        public static Icon LoadIcon()
+        {
+            using (var stream = typeof(Brand).Assembly.GetManifestResourceStream("RemoteCam.Icon"))
+            using (var icon = new Icon(stream, 32, 32)) return (Icon)icon.Clone();
+        }
+        public static Image LoadLogo()
+        {
+            using (var stream = typeof(Brand).Assembly.GetManifestResourceStream("RemoteCam.Logo"))
+            using (var image = Image.FromStream(stream)) return new Bitmap(image);
+        }
+    }
     static class Program
     {
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern int SetCurrentProcessExplicitAppUserModelID(string id);
         [STAThread]
         static int Main(string[] args)
         {
+            SetCurrentProcessExplicitAppUserModelID("RemoteCam.Desktop");
             if (args.Length > 0 && args[0] == "--smoke")
                 return Smoke(args).GetAwaiter().GetResult();
             if (args.Length > 0 && args[0] == "--self-test") return SelfTest();
@@ -594,7 +610,8 @@ namespace RemoteCamDesktop
         long previousMetricTime;
         public MainWindow()
         {
-            Text = "RemoteCam Desktop · wersja testowa 0.1.3";
+            Text = "RemoteCam Desktop · wersja testowa " + Brand.Version;
+            Icon = Brand.LoadIcon(); ShowIcon = true;
             ClientSize = new Size(900, 700); MinimumSize = new Size(740, 620);
             StartPosition = FormStartPosition.CenterScreen;
             // Website accent (#ffe15a), paired with the requested warm dark brown.
@@ -605,7 +622,13 @@ namespace RemoteCamDesktop
             var muted = Color.FromArgb(181, 171, 157);
             BackColor = background; ForeColor = ink;
             Font = new Font("Segoe UI", 10);
-            var title = new Label { Text = "RemoteCam · Twoja kamera Windows", ForeColor = accent, Font = new Font("Segoe UI", 22, FontStyle.Bold), Dock = DockStyle.Top, Height = 58, Padding = new Padding(20, 12, 0, 0) };
+            var title = new Panel { Dock = DockStyle.Top, Height = 94 };
+            var logo = new PictureBox { Image = Brand.LoadLogo(), SizeMode = PictureBoxSizeMode.Zoom, Left = 22, Top = 15, Width = 64, Height = 64, AccessibleName = "Logo RemoteCam" };
+            var wordmark = new Label { Text = "RemoteCam", AutoSize = true, Left = 101, Top = 11, ForeColor = ink, Font = new Font("Segoe UI", 25, FontStyle.Bold) };
+            var tagline = new Label { Text = "Twoja kamera. Twój komputer.", AutoSize = true, Left = 104, Top = 60, ForeColor = muted };
+            var badge = new Label { Text = "DESKTOP  /  " + Brand.Version + " TEST", AutoSize = true, ForeColor = accent, Font = new Font("Segoe UI", 9, FontStyle.Bold), Top = 27, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            title.Controls.AddRange(new Control[] {logo, wordmark, tagline, badge});
+            title.Resize += delegate { badge.Left = title.ClientSize.Width - badge.Width - 24; };
             var help = new Label { Text = "Włącz Stream w RemoteCam na telefonie i wybierz H.264 lub H.265 + WebRTC.", ForeColor = muted, Dock = DockStyle.Top, Height = 40, Padding = new Padding(22, 5, 0, 0) };
             var connection = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(22, 5, 0, 0) };
             address.Width = 330; address.Text = File.Exists(settings) ? File.ReadAllText(settings) : "192.168.1.11:8080";
@@ -631,7 +654,7 @@ namespace RemoteCamDesktop
             // granularity turning a nominal 33 ms interval into roughly 20 fps.
             // Unchanged frames are skipped, with at most one conversion in flight.
             timer.Interval = 15; timer.Tick += async delegate { await RefreshPreview(); }; timer.Start();
-            FormClosed += delegate { timer.Dispose(); if (preview.Image != null) { preview.Image.Dispose(); preview.Image = null; } };
+            FormClosed += delegate { timer.Dispose(); logo.Image.Dispose(); Icon.Dispose(); if (preview.Image != null) { preview.Image.Dispose(); preview.Image = null; } };
             FormClosing += async delegate(object sender, FormClosingEventArgs e)
             {
                 if (closing) return;

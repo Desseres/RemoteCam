@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 108 108">
+  <!-- Camera mark from store/google-play/source/play-icon-512.svg. -->
+  <rect width="108" height="108" rx="23" fill="#1c1815"/>
+  <g transform="translate(-12 -8) scale(1.20)">
+    <path fill="#ffe15a" d="M31 37H40L44 31H62L66 37H77Q82 37 82 42V70Q82 75 77 75H31Q26 75 26 70V42Q26 37 31 37Z"/>
+    <circle cx="54" cy="55" r="14" fill="#1c1815"/>
+    <circle cx="54" cy="55" r="8" fill="#ffe15a"/>
+    <circle cx="72" cy="45" r="3" fill="#1c1815"/>
+    <path d="M72 26Q80 27 83 34M74 19Q87 21 91 32" fill="none" stroke="#ffe15a" stroke-width="3" stroke-linecap="round"/>
+  </g>
+</svg>
