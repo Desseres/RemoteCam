@@ -28,6 +28,8 @@ static class HardwareAdviceTests
         Check(StreamAdvice.Evaluate(input, 30, 30, 0, 0, 3).Contains("Straty transmisji"), "loss takes precedence over FPS");
         Check(StreamAdvice.Evaluate(input, 20, 20, 10, 4, 0).Contains("błędy dekodowania"), "do not infer CPU limit from corruption");
         Check(StreamAdvice.Evaluate(input, 30, 30, 5, 0, 0).Contains("nie utrzymuje"), "bursts cannot hide stalls");
+        Check(StreamAdvice.Evaluate(input, 30, 0, 0, 0, 0, false).Contains("utrzymał"), "disabled preview must not report overload");
+        Check(StreamAdvice.Evaluate(input, 30, 0, 0, 0, 0, false).Contains("Podgląd wyłączony"), "disabled preview is explicit");
         Check(StreamAdvice.Evaluate(new InputVideo(1920, 1080, 15, "H.264"), 15, 15, 0, 0, 0).Contains("utrzymał"), "respect lower source FPS");
         Check(StreamAdvice.Evaluate(new InputVideo(1920, 1080, 60, "H.264"), 60, 30, 0, 0, 0).Contains("utrzymał"), "preview target is capped at 30");
         Check(StreamAdvice.Evaluate(new InputVideo(1920, 1080, 0, "H.264"), 30, 30, 0, 0, 0).Contains("brak wiarygodnej"), "unknown source rate must not pass");

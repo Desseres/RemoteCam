@@ -69,35 +69,36 @@ namespace RemoteCamDesktop
         long errors, loss;
         object profile;
         int generation = -1;
+        bool previewMeasured = true;
         public void Reset()
         {
             Result = ""; Seconds = warmup = received = shown = slowSeconds = 0;
             errors = loss = 0; profile = null; generation = -1;
         }
-        public void Observe(InputVideo input, int attempt, double seconds, long frames, long previews, long decodeErrors, long lost)
+        public void Observe(InputVideo input, int attempt, double seconds, long frames, long previews, long decodeErrors, long lost, bool measurePreview = true)
         {
             if (input == null || seconds <= 0) { Reset(); return; }
-            if (!Object.ReferenceEquals(profile, input) || generation != attempt) { Reset(); profile = input; generation = attempt; }
+            if (!Object.ReferenceEquals(profile, input) || generation != attempt || previewMeasured != measurePreview) { Reset(); profile = input; generation = attempt; previewMeasured = measurePreview; }
             if (warmup < 3) { warmup += seconds; return; }
             double target = input.Fps > 0 ? Math.Min(30, input.Fps) : 30;
             Seconds += seconds; received += Math.Max(0, frames); shown += Math.Max(0, previews);
             errors += Math.Max(0, decodeErrors); loss += Math.Max(0, lost);
             if (lost > 0) Result = "W bieżącym pomiarze wystąpiły straty transmisji. Zmniejsz bitrate i sprawdź Wi-Fi; poprzednia ocena płynności wymaga ponownej weryfikacji.";
             else if (decodeErrors > 0) Result = "W bieżącym pomiarze wystąpiły błędy dekodowania. Poprzednia ocena płynności wymaga ponownej weryfikacji.";
-            if (frames / seconds < target * .9 || previews / seconds < target * .9) slowSeconds += seconds;
+            if (frames / seconds < target * .9 || (measurePreview && previews / seconds < target * .9)) slowSeconds += seconds;
             if (Seconds < 30) return;
-            Result = Evaluate(input, received / Seconds, shown / Seconds, slowSeconds, errors, loss);
+            Result = Evaluate(input, received / Seconds, shown / Seconds, slowSeconds, errors, loss, measurePreview);
             Seconds = received = shown = slowSeconds = 0; errors = loss = 0;
         }
-        public static string Evaluate(InputVideo input, double receiveFps, double previewFps, double slowSeconds, long errors, long loss)
+        public static string Evaluate(InputVideo input, double receiveFps, double previewFps, double slowSeconds, long errors, long loss, bool measurePreview = true)
         {
-            string summary = String.Format("Pomiar 30 s: odbiór {0:F1}, podgląd {1:F1} kl./s.\n", receiveFps, previewFps);
+            string summary = measurePreview ? String.Format("Pomiar 30 s: odbiór {0:F1}, podgląd {1:F1} kl./s.\n", receiveFps, previewFps) : String.Format("Pomiar 30 s: odbiór {0:F1} kl./s. Podgląd wyłączony.\n", receiveFps);
             if (input.EstimatedFps && input.Fps > 0) summary += "FPS źródła jest szacowany — porównaj go z ustawieniem telefonu.\n";
             if (loss > 0) return summary + "Straty transmisji: " + loss + " pakietów. Najpierw zmniejsz bitrate na telefonie i sprawdź połączenie Wi-Fi. Ten pomiar nie wyznacza limitu CPU/GPU.";
             if (errors > 0) return summary + "Wystąpiły błędy dekodowania. Spróbuj H.264 i niższego bitrate. Nie można potwierdzić stabilności tego profilu ani przypisać błędu wydajności CPU.";
             if (input.Fps <= 0) return summary + "Nie znamy FPS źródła — brak wiarygodnej oceny wydajności. Zacznij od H.264 / 1920 × 1080 / 30 kl./s i sprawdź ustawienia telefonu.";
             double target = Math.Min(30, input.Fps);
-            if (receiveFps < target * .9 || previewFps < target * .9 || slowSeconds > 3)
+            if (receiveFps < target * .9 || (measurePreview && previewFps < target * .9) || slowSeconds > 3)
                 return summary + "Ten profil nie utrzymuje płynności. Ustaw na telefonie " + LowerResolution(input) + " / maks. 30 kl./s i porównaj kolejny pomiar. Przy H.265 sprawdź też H.264. Przyczyną może być dekoder, obciążenie komputera lub telefon.";
             return summary + "Profil " + input.Description + " utrzymał zakładaną płynność w tym pomiarze. Możesz przy nim zostać. To sprawdzony profil, a nie fizyczne maksimum sprzętu; pomiar nie określa opóźnienia obrazu.";
         }

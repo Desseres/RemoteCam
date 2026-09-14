@@ -36,6 +36,10 @@ $manifestPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'app/RemoteCam.m
 $iconPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'assets/RemoteCam.ico'))
 $logoPath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'assets/brandmark.png'))
 $versionSource = Join-Path $objDir 'BuildInfo.cs'
+$audioDeps = Join-Path $depsDir 'audio'
+if (!(Test-Path "$audioDeps/naudio.wasapi/lib/netstandard2.0/NAudio.Wasapi.dll")) { throw 'Run windows/prepare-audio.ps1 first.' }
+$netstandard = Get-ChildItem "$env:windir/Microsoft.NET/assembly/GAC_MSIL/netstandard" -Recurse -Filter netstandard.dll | Select-Object -First 1 -ExpandProperty FullName
+$audioReferences = @("/reference:$netstandard", "/reference:$audioDeps/naudio.core/lib/netstandard2.0/NAudio.Core.dll", "/reference:$audioDeps/naudio.wasapi/lib/netstandard2.0/NAudio.Wasapi.dll", '/reference:System.IO.Compression.FileSystem.dll')
 $versionCode = @"
 using System.Reflection;
 [assembly: AssemblyTitle("RemoteCam Desktop")]
@@ -48,10 +52,12 @@ using System.Reflection;
 namespace RemoteCamDesktop { static class BuildInfo { public const string Version = "$($release.version)"; } }
 "@
 [IO.File]::WriteAllText($versionSource, $versionCode, [Text.UTF8Encoding]::new($false))
-& $csc /nologo /target:winexe /platform:x64 /optimize+ /unsafe+ /deterministic+ /codepage:65001 "/out:$desktopExe" "/win32manifest:$manifestPath" "/win32icon:$iconPath" "/resource:$iconPath,RemoteCam.Icon" "/resource:$logoPath,RemoteCam.Logo" /reference:System.Management.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Net.Http.dll /reference:System.Core.dll /reference:System.Web.Extensions.dll $desktopSource (Join-Path $PSScriptRoot 'app/HardwareInfo.cs') $versionSource
+& $csc /nologo /target:winexe /platform:x64 /optimize+ /unsafe+ /deterministic+ /codepage:65001 "/out:$desktopExe" "/win32manifest:$manifestPath" "/win32icon:$iconPath" "/resource:$iconPath,RemoteCam.Icon" "/resource:$logoPath,RemoteCam.Logo" /reference:System.Management.dll /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Net.Http.dll /reference:System.Core.dll /reference:System.Web.Extensions.dll $audioReferences $desktopSource (Join-Path $PSScriptRoot 'app/HardwareInfo.cs') (Join-Path $PSScriptRoot 'app/AudioModule.cs') (Join-Path $PSScriptRoot 'app/AudioPanel.cs') (Join-Path $PSScriptRoot 'app/AudioProbe.cs') $versionSource
 if ($LASTEXITCODE) { throw 'Desktop build failed.' }
 Copy-Item "$PSScriptRoot/Install-Camera.ps1","$PSScriptRoot/Uninstall-Camera.ps1","$PSScriptRoot/README.md","$PSScriptRoot/VALIDATION.md" $outDir
 Copy-Item (Join-Path $repoRoot 'LICENSE') (Join-Path $outDir 'LICENSE.txt')
+Copy-Item "$audioDeps/naudio.core/lib/netstandard2.0/NAudio.Core.dll","$audioDeps/naudio.wasapi/lib/netstandard2.0/NAudio.Wasapi.dll" $outDir
+Copy-Item "$audioDeps/vbcable.zip" (Join-Path $outDir 'VBCABLE_Driver_Pack45.zip')
 Copy-Item "$PSScriptRoot/licenses" $outDir -Recurse -Force
 $ffmpeg = Get-ChildItem "$depsDir/ffmpeg-pinned" -Filter ffmpeg.exe -Recurse | Select-Object -First 1
 if (!$ffmpeg) { throw 'FFmpeg is missing. Run prepare-dependencies.ps1.' }

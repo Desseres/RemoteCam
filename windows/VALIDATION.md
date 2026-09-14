@@ -1,5 +1,31 @@
 # Windows prototype validation — 14 September 2026
 
+## 0.1.7 tray and suspended preview; optional audio module
+
+The live tray probe exercised the real window X path with the physical phone.
+While hidden, Media Foundation returned changing 1920×1080 NV12 samples from
+the RemoteCam camera (`RemoteCamHost --probe`, exit 0). Over the hidden interval
+the receiver delivered 213 video frames and the audio module received 2,726,400
+PCM bytes; the local preview started **zero** conversions. Restore resumed the
+preview without restarting the receiver. Manual preview disable and minimizing
+also suspended it. Explicit exit completed and no media child processes remained.
+This tests the system camera API, not an OBS recording or end-to-end latency.
+
+The separate VB-CABLE audio capture test returned 814,314 nonzero live samples,
+zero nonzero samples during mute, 204,806 after unmute, and zero after stop.
+It captured 48 kHz stereo IEEE float through the Windows recording endpoint;
+only counters were retained. AudioBufferTests verifies queued-data mute, gain,
+underrun silence, bounded overflow and clearing. HardwareAdviceTests verifies
+that disabling preview does not imply decoder overload.
+
+VB-CABLE Pack45 was downloaded from its official site and its SHA-256 and valid
+VB-Audio installer signature verified. Its installer changed this host's default
+devices; with the user's choice, 7.1 Surround Sound and HF-50 were restored.
+The current endpoint name remains CABLE Output. A proposed automatic rename was
+removed after Windows denied the property write; use Windows sound settings.
+No automatic device-name/default changes are performed by the application.
+The original optional driver archive and NAudio MIT notices ship with the app.
+
 ## 0.1.5 hardware and quality panel
 
 WMI discovery returned the host's Intel i9-12900KS (16 cores / 24 threads),

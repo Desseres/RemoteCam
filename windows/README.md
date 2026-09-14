@@ -1,19 +1,21 @@
 # RemoteCam Desktop — Windows 11 prototype
 
 Receives the existing RemoteCam phone stream and exposes **RemoteCam Windows
-Virtual Camera** to camera applications. This is an experimental **video-only**
-companion, independent of OBS Browser Source. It does not install a virtual microphone.
+Virtual Camera** to camera applications. This experimental companion runs
+independently of OBS Browser Source. An optional microphone module routes phone
+audio through VB-CABLE as a separate Windows recording device.
 
 ## Install (recommended)
 
-Run **RemoteCam-Desktop-0.1.5-test-Setup.exe** on Windows 11 x64 and accept
+Run **RemoteCam-Desktop-0.1.7-test-Setup.exe** on Windows 11 x64 and accept
 the administrator prompt. This single, offline installer includes the application,
 decoder, relay and camera component. It creates a Start menu shortcut and offers
 an optional desktop shortcut. No separate camera-registration script is needed.
 Open RemoteCam Desktop, enable Stream on the phone and connect to its HTTP address.
 
-Later installers update the same application directory. Close RemoteCam Desktop
-before updating. Uninstall through Windows Settings → Apps → Installed apps.
+Later installers update the same application directory. Choose **Zakończ** from
+the RemoteCam tray menu before updating; the window's X now hides it.
+Uninstall through Windows Settings → Apps → Installed apps.
 Close applications using the camera first; a loaded camera DLL may require a restart
 to finish removal. The saved phone address and diagnostics are retained.
 
@@ -44,6 +46,47 @@ The panel recommends settings; change them on the phone. A passing profile is
 only evidence for that observation, not the physical maximum or a latency test.
 4K input still has to be decoded before scaling to the fixed 1080p camera output.
 Neither CPU/GPU names nor a short live test can guarantee a maximum resolution.
+
+## Background operation (0.1.7)
+
+Closing the window with X or minimizing it hides RemoteCam in the Windows tray.
+The receiver, virtual camera and enabled phone microphone continue working.
+Double-click the tray icon or choose **Pokaż RemoteCam** to restore the window.
+The tray menu also offers microphone mute, disconnect, and **Zakończ — zatrzymaj
+transmisję**. Exit stops the media processes and removes the session camera.
+This is a user-session application, not a Windows service; it does not survive
+logout, shutdown or an explicit exit, and it does not start automatically at login.
+
+Video is decoded once. The local preview converts the resulting NV12 frames into
+a bitmap. Hidden/minimized windows, other tabs and the unchecked **Podgląd lokalny**
+option skip that conversion and drawing. In-flight conversions are discarded;
+the preview bitmap is released and UI polling drops to once per second. The
+background receiver and its recovery logic remain active. Quality advice excludes
+preview FPS while preview is off, rather than reporting it as a performance failure.
+
+## Optional phone microphone (0.1.6/0.1.7)
+
+Open **Mikrofon**, install VB-CABLE if absent, connect the phone and enable its
+microphone. Select **CABLE Input (VB-Audio Virtual Cable)** and click **Włącz mikrofon**.
+In OBS add an Audio Input Capture source using **CABLE Output**. Windows sound
+settings can rename that input to **RemoteCam Microphone (VB-CABLE)**. Leave the
+OBS source's monitoring off and Windows **Listen to this device** unchecked.
+Mute the browser phone player to avoid capturing that playback a second time.
+Keep the physical microphone as its own OBS source.
+
+The module starts off, has its own mute, 0–100% gain and level meter, and never
+renders to speakers. It uses the existing relay session with an audio-only decoder
+(48 kHz stereo float PCM), a bounded 100 ms queue and an explicit VB-CABLE WASAPI
+endpoint. There is no default-device fallback. Decoder stalls/source restarts retry;
+disconnect/exit clears queued audio and stops audio processing. Microphone enable
+and gain/mute settings are not persisted across application restarts.
+
+VB-CABLE is a separate VB-Audio donationware product; the package carries its
+original unmodified installer archive and licensing notice. Its installation is
+optional and explicitly initiated by the user. Its installer can change Windows'
+default input/output and may require a restart: restore your normal speakers and
+physical microphone afterward. RemoteCam does not uninstall this shared driver.
+See `licenses/VB-CABLE.txt` and https://vb-audio.com/Services/licensing.htm.
 
 ## Run the portable package
 
@@ -118,11 +161,12 @@ retry after restarting Windows. The desktop folder can then be removed.
 
 Requires Visual Studio 2022 C++ tools, Windows SDK 10.0.22000.0, and Windows 11 x64.
 Run `prepare-dependencies.ps1`, then `build.ps1` from PowerShell.
-Output: `dist/windows/RemoteCam-Desktop-0.1.5-test/`.
+Also run `prepare-audio.ps1` once for the verified NAudio/VB-CABLE dependencies.
+Output: `dist/windows/RemoteCam-Desktop-0.1.7-test/`.
 
 For the single EXE installer, run `prepare-installer.ps1` once to download and
 verify the pinned Inno Setup 6.7.3 compiler, then run `build-installer.ps1`.
-Output: `dist/windows/RemoteCam-Desktop-0.1.5-test-Setup.exe`, with a SHA-256 sidecar.
+Output: `dist/windows/RemoteCam-Desktop-0.1.7-test-Setup.exe`, with a SHA-256 sidecar.
 Pass `-Iscc PATH` to use an existing compiler, or `-SkipAppBuild` to package an
 already built app. Version and channel are in `version.json` (installer is test-only).
 The installer uses Windows' normal elevation prompt to register the camera in
@@ -141,6 +185,14 @@ NACK feedback are enabled only in the desktop child via `REMOTECAM_RTP_REPAIR=1`
 The separately installed go2rtc used with OBS is not replaced.
 
 - `RemoteCam.exe --self-test`: address validation and NV12 preview checks.
+- `RemoteCam.exe --tray-test PHONE_IP:8080 ABSOLUTE_LOG_PATH`: live hidden-window
+  camera API probe, zero preview conversions while hidden, preview resume/manual
+  disable/minimize, optional audio continuity through installed VB-CABLE, and exit.
+- `RemoteCam.exe --audio-test PHONE_IP:8080 ABSOLUTE_LOG_PATH`: reads the real
+  VB-CABLE recording endpoint; verifies live/muted/resumed/stopped signal. Saves
+  only counters, never audio samples. Requires the phone microphone to be enabled.
+- `tests/AudioBufferTests.cs`: verifies queued-audio mute, gain, silence on
+  underrun, bounded overflow and buffer clearing.
 - `tests/HardwareAdviceTests.cs`: compile with `app/HardwareInfo.cs` and
   `System.Management.dll`; checks input parsing, measurement windows, reconnects,
   variable source FPS, packet-loss/corruption priority and resolution guidance.

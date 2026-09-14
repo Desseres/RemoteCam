@@ -40,6 +40,21 @@ namespace RemoteCamDesktop
         static int Main(string[] args)
         {
             SetCurrentProcessExplicitAppUserModelID("RemoteCam.Desktop");
+            if (args.Length == 3 && args[0] == "--audio-test") return AudioProbe.Run(args[1], args[2]).GetAwaiter().GetResult();
+            if (args.Length == 3 && args[0] == "--tray-test") {
+                Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
+                int result = 1;
+                using (var window = new MainWindow()) {
+                    window.ShowInTaskbar = false; window.StartPosition = FormStartPosition.Manual; window.Location = new Point(-32000, -32000);
+                    window.Shown += async delegate {
+                        result = await window.MeasureTray(args[1], args[2]);
+                        window.FormClosed += delegate { File.AppendAllText(args[2], "explicitExit=true\n"); };
+                        window.exitRequested = true; window.Close();
+                    };
+                    Application.Run(window);
+                }
+                return result;
+            }
             if (args.Length > 0 && args[0] == "--smoke")
                 return Smoke(args).GetAwaiter().GetResult();
             if (args.Length > 0 && args[0] == "--self-test") return SelfTest();
@@ -48,7 +63,7 @@ namespace RemoteCamDesktop
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 int result = 1;
-                using (var window = new MainWindow())
+                using (var window = new MainWindow(true))
                 {
                     window.ShowInTaskbar = false; window.StartPosition = FormStartPosition.Manual;
                     window.Location = new Point(-32000, -32000);
@@ -65,7 +80,7 @@ namespace RemoteCamDesktop
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
-                using (var window = new MainWindow())
+                using (var window = new MainWindow(true))
                 {
                     window.ShowInTaskbar = false;
                     window.StartPosition = FormStartPosition.Manual;
@@ -237,6 +252,7 @@ namespace RemoteCamDesktop
         public long ReadCalls { get { return Interlocked.Read(ref readCalls); } }
         public string Codec = "—";
         public volatile InputVideo Input;
+        public volatile string AudioEndpoint;
         public volatile bool DecoderRunning;
         public int Generation;
         public long LostPackets;
@@ -405,6 +421,7 @@ namespace RemoteCamDesktop
                         if (!available) throw new IOException("Odbiornik lokalny nie odpowiada.");
                     }
                     Report("Łączenie z telefonem… Włącz Stream i tryb WebRTC.");
+                    AudioEndpoint = "rtsp://127.0.0.1:" + rtsp + "/phone";
                     decoderError = "";
                     hardwareFailed = false;
                     // Preserve the probed keyframe/parameter sets; nobuffer discarded
@@ -451,6 +468,7 @@ namespace RemoteCamDesktop
                     if (!token.IsCancellationRequested) Report(e.Message + " Ponawiam za 2 s…");
                 }
                 finally {
+                    AudioEndpoint = null;
                     DecoderRunning = false;
                     if (attemptStop != null) {
                         attemptStop.Cancel();
@@ -621,8 +639,16 @@ namespace RemoteCamDesktop
         readonly Button connect = new Button(), install = new Button();
         readonly Label status = new Label(), metrics = new Label();
         readonly PictureBox preview = new PictureBox();
+        readonly CheckBox previewEnabled = new CheckBox();
+        readonly Label previewNotice = new Label();
+        readonly NotifyIcon tray = new NotifyIcon();
+        readonly bool diagnosticMode;
+        bool inTray, trayNoticeShown;
+        internal bool exitRequested;
+        long previewConversions;
         readonly Panel hardwarePage = new Panel();
         readonly Button hardwareTab = new Button();
+        AudioPanel audioPage;
         readonly Label hardwareText = new Label(), streamText = new Label(), adviceText = new Label();
         readonly StreamAdvice advice = new StreamAdvice();
         long previousErrors, previousLoss;
@@ -635,8 +661,9 @@ namespace RemoteCamDesktop
         long presentedFrames, previousPresented, previousReceived;
         readonly Stopwatch metricsClock = Stopwatch.StartNew();
         long previousMetricTime;
-        public MainWindow()
+        public MainWindow(bool diagnosticMode = false)
         {
+            this.diagnosticMode = diagnosticMode;
             Text = "RemoteCam Desktop · wersja testowa " + Brand.Version;
             Icon = Brand.LoadIcon(); ShowIcon = true;
             ClientSize = new Size(900, 700); MinimumSize = new Size(740, 620);
@@ -668,14 +695,19 @@ namespace RemoteCamDesktop
             install.BackColor = panel; install.ForeColor = ink; install.FlatAppearance.MouseOverBackColor = Color.FromArgb(57, 47, 37);
             connection.Controls.AddRange(new Control[] {address, connect, install});
             preview.Dock = DockStyle.Fill; preview.BackColor = Color.FromArgb(17, 14, 12); preview.SizeMode = PictureBoxSizeMode.Zoom;
+            previewNotice.Dock = DockStyle.Fill; previewNotice.TextAlign = ContentAlignment.MiddleCenter; previewNotice.ForeColor = muted;
+            previewNotice.Text = "Podgląd lokalny wyłączony.\nObraz nadal trafia do kamery Windows.";
+            preview.Controls.Add(previewNotice);
             var footer = new Panel { Dock = DockStyle.Bottom, Height = 170, Padding = new Padding(20), BackColor = panel };
             string registered = Microsoft.Win32.Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{D168A389-283B-4AD8-ACB4-1CC943368FA0}\InprocServer32", "", null) as string;
             status.Text = registered != null && File.Exists(registered) ? "Kamera zainstalowana. Włącz Stream na telefonie i kliknij Połącz." : "Gotowy. Przy pierwszym uruchomieniu zainstaluj kamerę."; status.Dock = DockStyle.Top; status.Height = 45;
             metrics.Dock = DockStyle.Top; metrics.Height = 25; metrics.ForeColor = accent;
-            var instructions = new Label { Text = "W OBS: Urządzenie do przechwytywania wideo → RemoteCam (wirtualna kamera Windows).\nTa wersja udostępnia obraz. Mikrofon wybierz osobno w programie odbiorczym.", Dock = DockStyle.Bottom, Height = 52, ForeColor = muted };
+            var instructions = new Label { Text = "OBS: wybierz kamerę RemoteCam. Audio telefonu włączysz w zakładce Mikrofon.\nKrzyżyk chowa do traya. Aby zatrzymać transmisję, wybierz Zakończ z menu ikony.", Dock = DockStyle.Bottom, Height = 52, ForeColor = muted };
             footer.Controls.Add(instructions); footer.Controls.Add(metrics); footer.Controls.Add(status);
             var content = new Panel { Dock = DockStyle.Fill };
             content.Controls.Add(preview);
+            audioPage = new AudioPanel(() => receiver) { Dock = DockStyle.Fill, Visible = false };
+            content.Controls.Add(audioPage);
             hardwarePage.Dock = DockStyle.Fill; hardwarePage.BackColor = background; hardwarePage.AutoScroll = true;
             var cards = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(22, 12, 22, 20) };
             var equipmentTitle = new Label { Text = "TWÓJ KOMPUTER", ForeColor = accent, AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
@@ -690,15 +722,24 @@ namespace RemoteCamDesktop
             var tabs = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 43, Padding = new Padding(22, 2, 0, 0) };
             var videoTab = new Button { Text = "Podgląd", Width = 120, Height = 32 };
             hardwareTab.Text = "Sprzęt i jakość"; hardwareTab.Width = 165; hardwareTab.Height = 32;
-            foreach (Button tab in new[] {videoTab, hardwareTab}) { tab.FlatStyle = FlatStyle.Flat; tab.FlatAppearance.BorderColor = Color.FromArgb(86, 73, 51); tab.Cursor = Cursors.Hand; }
+            var audioTab = new Button { Text = "Mikrofon", Width = 130, Height = 32 };
+            foreach (Button tab in new[] {videoTab, hardwareTab, audioTab}) { tab.FlatStyle = FlatStyle.Flat; tab.FlatAppearance.BorderColor = Color.FromArgb(86, 73, 51); tab.Cursor = Cursors.Hand; }
             Action<bool> selectTab = delegate(bool hardware) {
                 preview.Visible = !hardware; hardwarePage.Visible = hardware; if (hardware) hardwarePage.BringToFront();
+                audioPage.Visible = false; audioTab.BackColor = panel; audioTab.ForeColor = ink;
                 footer.Height = hardware ? 90 : 170; instructions.Visible = !hardware;
                 videoTab.BackColor = hardware ? panel : accent; videoTab.ForeColor = hardware ? ink : background;
                 hardwareTab.BackColor = hardware ? accent : panel; hardwareTab.ForeColor = hardware ? background : ink;
             };
             videoTab.Click += delegate { selectTab(false); }; hardwareTab.Click += delegate { selectTab(true); };
-            selectTab(false); tabs.Controls.AddRange(new Control[] { videoTab, hardwareTab });
+            audioTab.Click += delegate {
+                selectTab(false); preview.Visible = false; audioPage.Visible = true; audioPage.BringToFront();
+                footer.Height = 90; instructions.Visible = false; videoTab.BackColor = panel; videoTab.ForeColor = ink;
+                audioTab.BackColor = accent; audioTab.ForeColor = background; audioPage.RefreshDevices();
+            };
+            previewEnabled.Text = "Podgląd lokalny"; previewEnabled.Checked = true; previewEnabled.AutoSize = true; previewEnabled.Margin = new Padding(14, 7, 0, 0);
+            previewEnabled.CheckedChanged += delegate { UpdatePreviewMode(); };
+            selectTab(false); tabs.Controls.AddRange(new Control[] { videoTab, hardwareTab, audioTab, previewEnabled });
             Controls.Add(content); Controls.Add(footer); Controls.Add(tabs); Controls.Add(connection); Controls.Add(help); Controls.Add(title);
             UpdateHardware(null);
             Shown += async delegate {
@@ -716,16 +757,68 @@ namespace RemoteCamDesktop
             // granularity turning a nominal 33 ms interval into roughly 20 fps.
             // Unchanged frames are skipped, with at most one conversion in flight.
             timer.Interval = 15; timer.Tick += async delegate { await RefreshPreview(); }; timer.Start();
-            FormClosed += delegate { timer.Dispose(); logo.Image.Dispose(); Icon.Dispose(); if (preview.Image != null) { preview.Image.Dispose(); preview.Image = null; } };
+            if (!diagnosticMode) {
+                tray.Icon = Icon; tray.Text = "RemoteCam Desktop"; tray.Visible = true;
+                var menu = new ContextMenuStrip();
+                menu.Items.Add("Pokaż RemoteCam", null, delegate { RestoreFromTray(); });
+                var trayMute = new ToolStripMenuItem("Wycisz mikrofon") { CheckOnClick = true };
+                trayMute.Click += delegate { audioPage.MicrophoneMuted = trayMute.Checked; };
+                menu.Items.Add(trayMute);
+                var disconnect = menu.Items.Add("Rozłącz", null, async delegate { if (receiver != null) await Toggle(); });
+                menu.Items.Add(new ToolStripSeparator());
+                menu.Items.Add("Zakończ — zatrzymaj transmisję", null, delegate { exitRequested = true; if (!busy) Close(); });
+                menu.Opening += delegate { trayMute.Checked = audioPage.MicrophoneMuted; trayMute.Enabled = audioPage.AudioActive; disconnect.Enabled = receiver != null && !busy; };
+                tray.ContextMenuStrip = menu; tray.DoubleClick += delegate { RestoreFromTray(); };
+            }
+            VisibleChanged += delegate { UpdatePreviewMode(); };
+            preview.VisibleChanged += delegate { UpdatePreviewMode(); };
+            Resize += delegate {
+                if (!diagnosticMode && WindowState == FormWindowState.Minimized && !closing) HideToTray();
+                else UpdatePreviewMode();
+            };
+            FormClosed += delegate { tray.Visible = false; if (tray.ContextMenuStrip != null) tray.ContextMenuStrip.Dispose(); tray.Dispose(); timer.Dispose(); logo.Image.Dispose(); Icon.Dispose(); ClearPreview(); };
             FormClosing += async delegate(object sender, FormClosingEventArgs e)
             {
                 if (closing) return;
+                if (e.CloseReason == CloseReason.WindowsShutDown || e.CloseReason == CloseReason.TaskManagerClosing) {
+                    // Do not block logout/shutdown. OS process teardown closes our
+                    // kill-on-close jobs and terminates the owned media children.
+                    closing = true; tray.Visible = false; timer.Stop(); return;
+                }
                 e.Cancel = true;
+                if (!diagnosticMode && !exitRequested && e.CloseReason == CloseReason.UserClosing) { HideToTray(); return; }
                 if (busy) return;
                 busy = true; connect.Enabled = false;
+                await audioPage.StopAudio();
                 if (receiver != null) { await receiver.Stop(); receiver.Dispose(); receiver = null; }
                 closing = true; timer.Stop(); Close();
             };
+        }
+        bool PreviewActive { get { return !closing && !inTray && Visible && WindowState != FormWindowState.Minimized && preview.Visible && previewEnabled.Checked; } }
+        void ClearPreview()
+        {
+            Image old = preview.Image; preview.Image = null; if (old != null) old.Dispose(); lastPreviewFrame = null;
+        }
+        void UpdatePreviewMode()
+        {
+            if (closing || IsDisposed) return;
+            bool active = PreviewActive;
+            timer.Interval = active ? 15 : 1000;
+            previewNotice.Visible = !previewEnabled.Checked;
+            if (!active) ClearPreview();
+        }
+        void HideToTray()
+        {
+            inTray = true; ShowInTaskbar = false; Hide(); UpdatePreviewMode();
+            if (!trayNoticeShown && !diagnosticMode) {
+                trayNoticeShown = true;
+                tray.ShowBalloonTip(2500, "RemoteCam działa w tle", "Transmisja pozostaje aktywna. Podgląd jest wyłączony. Zakończ aplikację z menu ikony.", ToolTipIcon.Info);
+            }
+        }
+        void RestoreFromTray()
+        {
+            inTray = false; ShowInTaskbar = !diagnosticMode;
+            WindowState = FormWindowState.Normal; Show(); Activate(); UpdatePreviewMode();
         }
         void Report(string value)
         {
@@ -778,6 +871,57 @@ namespace RemoteCamDesktop
             catch (Exception e) { File.WriteAllText(resultPath, e.ToString()); return 1; }
             finally { if (receiver != null) { await receiver.Stop(); receiver.Dispose(); receiver = null; } }
         }
+        public async Task<int> MeasureTray(string phone, string resultPath)
+        {
+            var log = new StringBuilder();
+            try {
+                trayNoticeShown = true;
+                address.Text = phone; await Toggle();
+                var ready = Stopwatch.StartNew();
+                while (presentedFrames == 0 && ready.ElapsedMilliseconds < 15000) await Task.Delay(50);
+                if (receiver == null || presentedFrames == 0) throw new IOException("No video for tray test.");
+                int generation = receiver.Generation;
+                var cables = CableDevice.List();
+                AudioModule testAudio = null;
+                try {
+                    if (cables.Count == 1) { testAudio = new AudioModule(); testAudio.Start(receiver, cables[0].Id); await Task.Delay(4000); }
+                    Close(); // exercise the actual user-close path, not just Hide()
+                    await Task.Delay(250);
+                    long before = receiver.Frames, conversions = previewConversions;
+                    long audioBefore = testAudio == null ? 0 : Interlocked.Read(ref testAudio.ReceivedBytes);
+                    if (!inTray || Visible || IsDisposed || timer.Interval != 1000) throw new Exception("Close did not suspend preview in tray.");
+                    var probeInfo = new ProcessStartInfo(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "RemoteCamHost.exe"), "--probe") {
+                        UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true
+                    };
+                    using (var probe = Process.Start(probeInfo)) {
+                        var stdout = probe.StandardOutput.ReadToEndAsync(); var stderr = probe.StandardError.ReadToEndAsync();
+                        if (!await Task.Run(() => probe.WaitForExit(15000))) { probe.Kill(); throw new Exception("Camera probe timed out."); }
+                        log.AppendLine("cameraProbeExit=" + probe.ExitCode); log.AppendLine(await stdout); log.AppendLine(await stderr);
+                        if (probe.ExitCode != 0) throw new Exception("System camera failed while in tray.");
+                    }
+                    await Task.Delay(5000);
+                    long hiddenFrames = receiver.Frames - before;
+                    long hiddenAudio = testAudio == null ? 0 : Interlocked.Read(ref testAudio.ReceivedBytes) - audioBefore;
+                    log.AppendLine("hiddenVideoFrames=" + hiddenFrames + " hiddenAudioBytes=" + hiddenAudio + " hiddenPreviewConversions=" + (previewConversions - conversions));
+                    if (hiddenFrames < 60 || previewConversions != conversions) throw new Exception("Tray did not preserve video with zero preview conversions.");
+                    if (testAudio != null && hiddenAudio == 0) throw new Exception("No audio while in tray.");
+                    RestoreFromTray(); ShowInTaskbar = false;
+                    long resumed = presentedFrames; await Task.Delay(1500);
+                    if (presentedFrames <= resumed) throw new Exception("Preview did not resume.");
+                    previewEnabled.Checked = false; await Task.Delay(100);
+                    conversions = previewConversions; await Task.Delay(1500);
+                    if (previewConversions != conversions) throw new Exception("Manual preview disable failed.");
+                    previewEnabled.Checked = true;
+                    WindowState = FormWindowState.Minimized; await Task.Delay(250);
+                    if (!inTray || Visible || PreviewActive) throw new Exception("Minimize did not enter tray.");
+                    log.AppendLine("restoredPreview=true manualDisable=true minimizedToTray=true receiverRestarted=" + (generation != receiver.Generation));
+                } finally { if (testAudio != null) await testAudio.Stop(); }
+                return 0;
+            } catch (Exception e) { log.AppendLine(e.ToString()); return 1; }
+            finally {
+                File.WriteAllText(resultPath, log.ToString());
+            }
+        }
         async Task Toggle()
         {
             if (busy) return;
@@ -798,6 +942,7 @@ namespace RemoteCamDesktop
                 }
                 else
                 {
+                    await audioPage.StopAudio();
                     await receiver.Stop(); receiver.Dispose(); receiver = null;
                     connect.Text = "Połącz"; address.Enabled = true;
                 }
@@ -808,7 +953,7 @@ namespace RemoteCamDesktop
                 status.Text = e.Message;
                 connect.Text = "Połącz"; address.Enabled = true;
             }
-            finally { busy = false; connect.Enabled = true; install.Enabled = receiver == null; }
+            finally { busy = false; connect.Enabled = true; install.Enabled = receiver == null; if (exitRequested) Close(); }
         }
         async Task Install()
         {
@@ -839,13 +984,15 @@ namespace RemoteCamDesktop
                 long errors = active == null ? 0 : Interlocked.Read(ref active.DecodeErrors);
                 long loss = active == null ? 0 : Interlocked.Read(ref active.LostPackets);
                 if (active != null) advice.Observe(active.DecoderRunning ? active.Input : null, active.Generation, seconds,
-                    received - previousReceived, presentedFrames - previousPresented, errors - previousErrors, loss - previousLoss);
+                    received - previousReceived, presentedFrames - previousPresented, errors - previousErrors, loss - previousLoss, PreviewActive);
                 previousErrors = errors; previousLoss = loss;
                 UpdateHardware(active);
-                metrics.Text = active == null ? "" : String.Format("{0} · odbiór: {1:F0} kl./s · podgląd: {2:F0} kl./s",
-                    active.Codec, (received - previousReceived) / seconds, (presentedFrames - previousPresented) / seconds);
+                metrics.Text = active == null ? "" : String.Format("{0} · odbiór: {1:F0} kl./s · ", active.Codec, (received - previousReceived) / seconds) +
+                    (PreviewActive ? String.Format("podgląd: {0:F0} kl./s", (presentedFrames - previousPresented) / seconds) : "podgląd wyłączony");
+                if (!diagnosticMode) tray.Text = active == null ? "RemoteCam · rozłączono" : "RemoteCam · " + active.Codec + " · " + (active.DecoderRunning ? "transmisja aktywna" : "oczekiwanie na obraz");
                 previousReceived = received; previousPresented = presentedFrames; previousMetricTime = now;
             }
+            if (!PreviewActive) return;
             if (Object.ReferenceEquals(frame, lastPreviewFrame)) return;
             if (frame == null)
             {
@@ -853,10 +1000,11 @@ namespace RemoteCamDesktop
                 lastPreviewFrame = null; return;
             }
             renderingPreview = true;
+            previewConversions++;
             try
             {
                 Bitmap next = await Task.Run(delegate { return Preview.Create(frame); });
-                if (closing || IsDisposed || receiver != active || active.Latest == null) { next.Dispose(); return; }
+                if (closing || IsDisposed || !PreviewActive || receiver != active || active.Latest == null) { next.Dispose(); return; }
                 Image old = preview.Image; preview.Image = next; if (old != null) old.Dispose();
                 lastPreviewFrame = frame; presentedFrames++;
             }

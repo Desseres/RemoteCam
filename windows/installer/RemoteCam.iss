@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.1.5"
+  #define AppVersion "0.1.7"
 #endif
 #ifndef PackageDir
   #error PackageDir is required; run windows/build-installer.ps1
@@ -81,6 +81,9 @@ Name: "desktopicon"; Description: "{cm:DesktopShortcut}"; GroupDescription: "{cm
 
 [Files]
 Source: "{#PackageDir}\RemoteCam.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PackageDir}\NAudio.Core.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PackageDir}\NAudio.Wasapi.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#PackageDir}\VBCABLE_Driver_Pack45.zip"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PackageDir}\RemoteCamHost.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PackageDir}\RemoteCamSource.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#PackageDir}\RemoteCamSource.dll"; DestDir: "{#CameraDir}"; DestName: "{#CameraFile}"; Flags: onlyifdoesntexist uninsrestartdelete
