@@ -1,5 +1,32 @@
 # Windows prototype validation — 14 September 2026
 
+## 0.1.5 hardware and quality panel
+
+WMI discovery returned the host's Intel i9-12900KS (16 cores / 24 threads),
+Intel UHD 770, NVIDIA RTX 3090 Ti, driver versions and 64 GB RAM. The new
+Sprzęt i jakość panel was rendered and visually checked with those real values.
+Hardware queries run off the UI thread and have a bounded UI wait; failed
+discovery does not disable the receiver. Names do not imply codec support.
+
+HardwareAdviceTests passes input parsing (including explicitly estimated RTSP
+frame rates), warmup/full observation timing, reconnect invalidation, unknown
+and variable FPS, portrait resolution reduction, stalls despite burst catchup,
+and packet-loss/corruption precedence. New loss immediately invalidates an older
+healthy result. Self-test and receiver watchdog tests also pass.
+
+The physical phone sent 4096×2304 H.265, decoded through D3D11VA. A 40.00 s
+WinForms test measured receive 29.75 fps / preview 29.40 fps, with 2.39 s UI
+process CPU time and no decoder errors. The first 30-second advisory window
+measured 30.0 / 29.8 fps and reported the profile as sustained for that window.
+Loss occurred later in the run; this prompted immediate invalidation of the
+previous result on new packet loss, covered by the regression test above.
+RTSP supplied a 30 tbr estimate, not explicit input FPS; the panel labels it
+as estimated and asks the user to compare the phone setting.
+
+These observations do not measure glass-to-glass latency or maximum hardware
+capability. Software-decoder resolution recommendations are conservative starting
+profiles, not CPU-model benchmarks. No phone settings are changed automatically.
+
 ## 0.1.4 branding and single EXE installer
 
 The WinForms app embeds the RemoteCam logo and a nine-size Windows icon

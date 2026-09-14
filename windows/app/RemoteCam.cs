@@ -61,7 +61,7 @@ namespace RemoteCamDesktop
                 }
                 return result;
             }
-            if (args.Length == 2 && args[0] == "--render-ui")
+            if (args.Length == 2 && (args[0] == "--render-ui" || args[0] == "--render-hardware"))
             {
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
@@ -71,6 +71,7 @@ namespace RemoteCamDesktop
                     window.StartPosition = FormStartPosition.Manual;
                     window.Location = new Point(-32000, -32000);
                     window.Show();
+                    if (args[0] == "--render-hardware") window.ShowHardwareForRender();
                     Application.DoEvents();
                     using (var bitmap = new Bitmap(window.Width, window.Height))
                     {
@@ -235,6 +236,11 @@ namespace RemoteCamDesktop
         long readCalls;
         public long ReadCalls { get { return Interlocked.Read(ref readCalls); } }
         public string Codec = "—";
+        public volatile InputVideo Input;
+        public volatile bool DecoderRunning;
+        public int Generation;
+        public long LostPackets;
+        public bool HardwareDecoder { get { return useHardware; } }
         string decoderError = "";
         bool useHardware = Environment.GetEnvironmentVariable("REMOTECAM_SOFTWARE_DECODER") != "1";
         volatile bool hardwareFailed;
@@ -301,10 +307,21 @@ namespace RemoteCamDesktop
         }
         void DrainErrors(Process p, bool codec)
         {
+            bool inputSection = false;
+            long previousLoss = 0;
             p.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
             {
                 if (e.Data == null) return;
                 if (!e.Data.StartsWith("frame=")) Trace(e.Data);
+                if (!codec && e.Data.Contains("[repair]")) {
+                    var loss = System.Text.RegularExpressions.Regex.Match(e.Data, @"\blost=(\d+)");
+                    long count;
+                    if (loss.Success && Int64.TryParse(loss.Groups[1].Value, out count)) {
+                        Interlocked.Add(ref LostPackets, Math.Max(0, count - previousLoss)); previousLoss = count;
+                    }
+                }
+                if (codec && e.Data.StartsWith("Input #")) inputSection = true;
+                if (codec && e.Data.StartsWith("Output #")) inputSection = false;
                 if (codec && (e.Data.Contains("corrupt") || e.Data.Contains("error while decoding") || e.Data.Contains("Could not find ref")))
                     Interlocked.Increment(ref DecodeErrors);
                 if (codec && (e.Data.Contains("Device setup failed") || e.Data.Contains("No device available") ||
@@ -313,8 +330,10 @@ namespace RemoteCamDesktop
                 if (codec && (e.Data.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 || e.Data.Contains("Option "))) decoderError = e.Data;
                 if (codec && e.Data.Contains("Video: "))
                 {
-                    if (e.Data.Contains("hevc")) Codec = "H.265";
-                    else if (e.Data.Contains("h264")) Codec = "H.264";
+                    if (inputSection) {
+                        var input = InputVideo.Parse(e.Data);
+                        if (input != null) { Input = input; Codec = input.Codec; }
+                    }
                 }
             };
             p.BeginErrorReadLine();
@@ -363,6 +382,7 @@ namespace RemoteCamDesktop
                 Task monitor = null;
                 try
                 {
+                    DecoderRunning = false; Input = null; Interlocked.Increment(ref Generation);
                     int api = FreePort(), rtsp = FreePort();
                     while (rtsp == api) rtsp = FreePort();
                     string config = Path.Combine(sessionDir, "go2rtc.yaml");
@@ -417,6 +437,7 @@ namespace RemoteCamDesktop
                             offset += count;
                         }
                         broker.Publish(frame);
+                        DecoderRunning = true;
                         Interlocked.Exchange(ref lastFrameTicks, Stopwatch.GetTimestamp());
                         Interlocked.Increment(ref frames);
                         if (firstFrame) { Report("Połączono · " + Codec + " · " + (useHardware ? "GPU" : "CPU") + " · wyjście 1920 × 1080 / 30 fps"); firstFrame = false; }
@@ -430,6 +451,7 @@ namespace RemoteCamDesktop
                     if (!token.IsCancellationRequested) Report(e.Message + " Ponawiam za 2 s…");
                 }
                 finally {
+                    DecoderRunning = false;
                     if (attemptStop != null) {
                         attemptStop.Cancel();
                         if (monitor != null) { try { await monitor; } catch (OperationCanceledException) { } }
@@ -599,6 +621,11 @@ namespace RemoteCamDesktop
         readonly Button connect = new Button(), install = new Button();
         readonly Label status = new Label(), metrics = new Label();
         readonly PictureBox preview = new PictureBox();
+        readonly Panel hardwarePage = new Panel();
+        readonly Button hardwareTab = new Button();
+        readonly Label hardwareText = new Label(), streamText = new Label(), adviceText = new Label();
+        readonly StreamAdvice advice = new StreamAdvice();
+        long previousErrors, previousLoss;
         readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         readonly string settings = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RemoteCam", "desktop-address.txt");
         Receiver receiver;
@@ -647,7 +674,42 @@ namespace RemoteCamDesktop
             metrics.Dock = DockStyle.Top; metrics.Height = 25; metrics.ForeColor = accent;
             var instructions = new Label { Text = "W OBS: Urządzenie do przechwytywania wideo → RemoteCam (wirtualna kamera Windows).\nTa wersja udostępnia obraz. Mikrofon wybierz osobno w programie odbiorczym.", Dock = DockStyle.Bottom, Height = 52, ForeColor = muted };
             footer.Controls.Add(instructions); footer.Controls.Add(metrics); footer.Controls.Add(status);
-            Controls.Add(preview); Controls.Add(footer); Controls.Add(connection); Controls.Add(help); Controls.Add(title);
+            var content = new Panel { Dock = DockStyle.Fill };
+            content.Controls.Add(preview);
+            hardwarePage.Dock = DockStyle.Fill; hardwarePage.BackColor = background; hardwarePage.AutoScroll = true;
+            var cards = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(22, 12, 22, 20) };
+            var equipmentTitle = new Label { Text = "TWÓJ KOMPUTER", ForeColor = accent, AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
+            hardwareText.Text = "Odczytuję CPU, GPU i pamięć…";
+            var adviceTitle = new Label { Text = "ZALECENIA DLA STRUMIENIA", ForeColor = accent, AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
+            var note = new Label { Text = "Kamera Windows udostępnia 1920 × 1080 / 30 kl./s. Wyższa rozdzielczość telefonu nadal wymaga zdekodowania całego obrazu przed zmniejszeniem.\n\nLista GPU nie potwierdza obsługi danego kodeka. Potwierdzeniem jest działający odbiór GPU. Zalecenie startowe jest ostrożnym punktem wyjścia; 4K wymaga pomiaru. Ustawienia zmień w telefonie.", ForeColor = muted };
+            foreach (Label label in new[] {equipmentTitle, hardwareText, streamText, adviceTitle, adviceText, note}) {
+                label.AutoSize = true; label.Margin = new Padding(0, 0, 0, 14); cards.Controls.Add(label);
+            }
+            cards.Resize += delegate { foreach (Control label in cards.Controls) label.MaximumSize = new Size(Math.Max(200, cards.ClientSize.Width - 48), 0); };
+            hardwarePage.Controls.Add(cards); content.Controls.Add(hardwarePage); hardwarePage.Visible = false;
+            var tabs = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 43, Padding = new Padding(22, 2, 0, 0) };
+            var videoTab = new Button { Text = "Podgląd", Width = 120, Height = 32 };
+            hardwareTab.Text = "Sprzęt i jakość"; hardwareTab.Width = 165; hardwareTab.Height = 32;
+            foreach (Button tab in new[] {videoTab, hardwareTab}) { tab.FlatStyle = FlatStyle.Flat; tab.FlatAppearance.BorderColor = Color.FromArgb(86, 73, 51); tab.Cursor = Cursors.Hand; }
+            Action<bool> selectTab = delegate(bool hardware) {
+                preview.Visible = !hardware; hardwarePage.Visible = hardware; if (hardware) hardwarePage.BringToFront();
+                footer.Height = hardware ? 90 : 170; instructions.Visible = !hardware;
+                videoTab.BackColor = hardware ? panel : accent; videoTab.ForeColor = hardware ? ink : background;
+                hardwareTab.BackColor = hardware ? accent : panel; hardwareTab.ForeColor = hardware ? background : ink;
+            };
+            videoTab.Click += delegate { selectTab(false); }; hardwareTab.Click += delegate { selectTab(true); };
+            selectTab(false); tabs.Controls.AddRange(new Control[] { videoTab, hardwareTab });
+            Controls.Add(content); Controls.Add(footer); Controls.Add(tabs); Controls.Add(connection); Controls.Add(help); Controls.Add(title);
+            UpdateHardware(null);
+            Shown += async delegate {
+                var probe = Task.Run(() => HardwareProfile.Read());
+                if (await Task.WhenAny(probe, Task.Delay(10000)) != probe) {
+                    if (!IsDisposed) hardwareText.Text = "Windows nie odpowiedział na odczyt sprzętu. Zalecenia na podstawie odbioru są nadal dostępne.";
+                    return;
+                }
+                var hardware = await probe;
+                if (!IsDisposed) hardwareText.Text = hardware.Description;
+            };
             connect.Click += async delegate { await Toggle(); };
             install.Click += async delegate { await Install(); };
             // Poll more often than the 30 fps input to avoid WinForms timer
@@ -668,6 +730,25 @@ namespace RemoteCamDesktop
         void Report(string value)
         {
             if (!IsDisposed && IsHandleCreated) BeginInvoke((Action)delegate { status.Text = value; });
+        }
+        public void ShowHardwareForRender()
+        {
+            hardwareText.Text = HardwareProfile.Read().Description;
+            hardwareTab.PerformClick();
+        }
+        void UpdateHardware(Receiver active)
+        {
+            if (active == null) {
+                advice.Reset();
+                streamText.Text = "Dekoder: nieaktywny · obsługę GPU sprawdzimy po połączeniu.";
+                adviceText.Text = "START: H.264 · 1920 × 1080 · 30 kl./s.\nJeśli odbiór używa CPU i przycina, zacznij od 1280 × 720 / 30 kl./s. Połącz się, aby sprawdzić profil przez 30 s.";
+                return;
+            }
+            var input = active.Input;
+            streamText.Text = "Dekoder: " + (active.DecoderRunning ? (active.HardwareDecoder ? "GPU · D3D11VA (aktywny)" : "CPU · dekodowanie programowe (4 wątki)") : "oczekiwanie na obraz") +
+                "\nTelefon: " + (input == null ? "odczytuję parametry…" : input.Description);
+            string baseline = active.HardwareDecoder ? "ZALECENIE STARTOWE: 1920 × 1080 / 30 kl./s, H.264." : "ZALECENIE STARTOWE DLA CPU: 1280 × 720 / 30 kl./s, H.264. Jeśli pomiar jest płynny, sprawdź 1920 × 1080.";
+            adviceText.Text = baseline + "\n\n" + (advice.Result.Length > 0 ? advice.Result : "Pomiar bieżącego profilu: " + Math.Min(30, (int)advice.Seconds) + "/30 s po rozgrzaniu odbioru. Zmiana strumienia rozpoczyna ocenę od nowa.");
         }
         public async Task<int> MeasurePreview(string phone, int seconds)
         {
@@ -691,6 +772,7 @@ namespace RemoteCamDesktop
                 File.WriteAllText(resultPath, String.Format(System.Globalization.CultureInfo.InvariantCulture,
                     "codec={0}\nseconds={1:F2}\nreceiveFps={2:F2}\npreviewFps={3:F2}\nprocessCpuSeconds={4:F2}\npipeReads={5}\nconnections={6}\n",
                     receiver.Codec, elapsed, receiveFps, previewFps, (Process.GetCurrentProcess().TotalProcessorTime - cpu).TotalSeconds, receiver.ReadCalls - firstReads, connections));
+                File.AppendAllText(resultPath, "input=" + (receiver.Input == null ? "unknown" : receiver.Input.Description) + "\ndecoder=" + (receiver.HardwareDecoder ? "GPU" : "CPU") + "\nadvice=" + advice.Result + "\n");
                 return receiveFps >= 25 && previewFps >= 25 ? 0 : 2;
             }
             catch (Exception e) { File.WriteAllText(resultPath, e.ToString()); return 1; }
@@ -707,6 +789,7 @@ namespace RemoteCamDesktop
                     Receiver.PhoneUri(address.Text);
                     receiver = new Receiver(); receiver.Status = Report;
                     previousReceived = previousPresented = presentedFrames = 0;
+                    previousErrors = previousLoss = 0; advice.Reset();
                     previousMetricTime = metricsClock.ElapsedMilliseconds;
                     lastPreviewFrame = null;
                     await receiver.Start(address.Text, true);
@@ -753,6 +836,12 @@ namespace RemoteCamDesktop
             {
                 long received = active == null ? 0 : active.Frames;
                 double seconds = (now - previousMetricTime) / 1000.0;
+                long errors = active == null ? 0 : Interlocked.Read(ref active.DecodeErrors);
+                long loss = active == null ? 0 : Interlocked.Read(ref active.LostPackets);
+                if (active != null) advice.Observe(active.DecoderRunning ? active.Input : null, active.Generation, seconds,
+                    received - previousReceived, presentedFrames - previousPresented, errors - previousErrors, loss - previousLoss);
+                previousErrors = errors; previousLoss = loss;
+                UpdateHardware(active);
                 metrics.Text = active == null ? "" : String.Format("{0} · odbiór: {1:F0} kl./s · podgląd: {2:F0} kl./s",
                     active.Codec, (received - previousReceived) / seconds, (presentedFrames - previousPresented) / seconds);
                 previousReceived = received; previousPresented = presentedFrames; previousMetricTime = now;

@@ -6,7 +6,7 @@ companion, independent of OBS Browser Source. It does not install a virtual micr
 
 ## Install (recommended)
 
-Run **RemoteCam-Desktop-0.1.4-test-Setup.exe** on Windows 11 x64 and accept
+Run **RemoteCam-Desktop-0.1.5-test-Setup.exe** on Windows 11 x64 and accept
 the administrator prompt. This single, offline installer includes the application,
 decoder, relay and camera component. It creates a Start menu shortcut and offers
 an optional desktop shortcut. No separate camera-registration script is needed.
@@ -20,6 +20,30 @@ to finish removal. The saved phone address and diagnostics are retained.
 Version **0.1.4-test** adds the application logo, multi-size EXE/window/taskbar icon,
 matching shortcut identity and a branded Polish/English setup wizard. Streaming
 behavior is unchanged from 0.1.3. The app interface is currently Polish.
+
+## Hardware and stream recommendations (0.1.5)
+
+Open **Sprzęt i jakość** to see the CPU model/core count, graphics adapters and
+driver versions, RAM, the active GPU/CPU decoder, and the phone's actual input
+resolution/codec/FPS. Hardware discovery runs asynchronously through Windows WMI;
+missing hardware data does not prevent streaming. An adapter listing alone is not
+proof of codec support. The active decoder reports whether D3D11VA is in use.
+
+Start with H.264 / 1920×1080 / 30 fps; the software-decoder starting recommendation
+is 1280×720 / 30 fps. These are conservative starting profiles, not model-specific
+hardware limits. After a three-second warmup, each 30-second observation compares
+receive and preview throughput with the input FPS (capped at the camera's 30 fps).
+Below 90% of the target, or more than three seconds below that threshold, suggests
+a lower input resolution. Unrecovered RTP packets and decoder errors instead
+produce transmission/corruption guidance. Unknown input FPS cannot pass the check.
+For RTSP inputs that omit FPS, the demuxer's `tbr` estimate is explicitly labelled
+as estimated and the user is asked to compare it with the phone's setting.
+Disconnect, retry or input-profile replacement discards the previous assessment.
+
+The panel recommends settings; change them on the phone. A passing profile is
+only evidence for that observation, not the physical maximum or a latency test.
+4K input still has to be decoded before scaling to the fixed 1080p camera output.
+Neither CPU/GPU names nor a short live test can guarantee a maximum resolution.
 
 ## Run the portable package
 
@@ -94,11 +118,11 @@ retry after restarting Windows. The desktop folder can then be removed.
 
 Requires Visual Studio 2022 C++ tools, Windows SDK 10.0.22000.0, and Windows 11 x64.
 Run `prepare-dependencies.ps1`, then `build.ps1` from PowerShell.
-Output: `dist/windows/RemoteCam-Desktop-0.1.4-test/`.
+Output: `dist/windows/RemoteCam-Desktop-0.1.5-test/`.
 
 For the single EXE installer, run `prepare-installer.ps1` once to download and
 verify the pinned Inno Setup 6.7.3 compiler, then run `build-installer.ps1`.
-Output: `dist/windows/RemoteCam-Desktop-0.1.4-test-Setup.exe`, with a SHA-256 sidecar.
+Output: `dist/windows/RemoteCam-Desktop-0.1.5-test-Setup.exe`, with a SHA-256 sidecar.
 Pass `-Iscc PATH` to use an existing compiler, or `-SkipAppBuild` to package an
 already built app. Version and channel are in `version.json` (installer is test-only).
 The installer uses Windows' normal elevation prompt to register the camera in
@@ -117,6 +141,9 @@ NACK feedback are enabled only in the desktop child via `REMOTECAM_RTP_REPAIR=1`
 The separately installed go2rtc used with OBS is not replaced.
 
 - `RemoteCam.exe --self-test`: address validation and NV12 preview checks.
+- `tests/HardwareAdviceTests.cs`: compile with `app/HardwareInfo.cs` and
+  `System.Management.dll`; checks input parsing, measurement windows, reconnects,
+  variable source FPS, packet-loss/corruption priority and resolution guidance.
 - `RemoteCam.exe --preview-test PHONE_IP:8080 20`: exercise the actual WinForms
   preview off-screen, with the registered camera; text-only `preview-result.txt`
   reports receive/preview rates, process CPU time, pipe reads and connections.
