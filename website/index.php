@@ -32,7 +32,7 @@ $downloadLabel = $apkAvailable ? t('download') : t('source');
  <div class="languages" aria-label="Language">
   <?php foreach (['pl','en'] as $lang): ?><a href="?lang=<?= $lang ?>" lang="<?= $lang ?>"<?= $language === $lang ? ' aria-current="page"' : '' ?>><?= strtoupper($lang) ?></a><?php endforeach; ?>
  </div>
- <a class="button small" href="#download"><?= e(t('download')) ?> <span aria-hidden="true">↗</span></a>
+ <a class="button small" href="#download"><?= e(t('downloads')) ?> <span aria-hidden="true">↓</span></a>
 </header>
 <main id="main">
  <section class="hero wrap" id="start">
@@ -40,8 +40,12 @@ $downloadLabel = $apkAvailable ? t('download') : t('source');
    <p class="eyebrow"><span class="status-dot"></span><?= e(t('eyebrow')) ?></p>
    <h1><?= e(t('hero1')) ?><br><em><?= e(t('hero2')) ?><br><?= e(t('hero3')) ?></em></h1>
    <p class="lead"><?= e(t('lead')) ?></p>
-   <div class="actions"><a class="button accent" href="<?= e($downloadUrl) ?>"<?= $apkAvailable ? ' download' : '' ?>><?= e($downloadLabel) ?> <span aria-hidden="true">↓</span></a><a class="text-link" href="#how"><?= e(t('see')) ?> →</a></div>
-   <ul class="facts"><li>Android 9+</li><li><?= e(t('free')) ?></li><li>H.264 · Opus · JPEG</li></ul>
+   <div class="actions platform-actions">
+    <a class="button accent" href="<?= e($downloadUrl) ?>"<?= $apkAvailable ? ' download' : '' ?>><?= platformIcon('android') ?><?= e($downloadLabel) ?></a>
+    <a class="button" href="<?= e($config['windows_download']) ?>"><?= platformIcon('windows') ?><?= e(t('downloadExe')) ?></a>
+   </div>
+   <a class="text-link" href="#how"><?= e(t('see')) ?> →</a>
+   <ul class="facts"><li>Android 9+</li><li>Windows 11 x64</li><li><?= e(t('free')) ?></li></ul>
   </div>
   <figure class="hero-visual"><img src="assets/hero.png" width="1254" height="1254" alt="<?= e(t('heroAlt')) ?>" fetchpriority="high"><figcaption><span>PHONE</span><span class="signal-line" aria-hidden="true"></span><span>COMPUTER</span></figcaption></figure>
  </section>
@@ -56,6 +60,15 @@ $downloadLabel = $apkAvailable ? t('download') : t('source');
   <p class="eyebrow"><?= e(t('howEyebrow')) ?></p><h2><?= e(t('howTitle')) ?></h2>
   <ol class="steps"><?php for ($n=1;$n<=3;$n++): ?><li><span>0<?= $n ?></span><h3><?= e(t('step'.$n)) ?></h3><p><?= e(t('step'.$n.'body')) ?></p></li><?php endfor; ?></ol>
  </div></section>
+ <section class="section wrap desktop-guide" aria-labelledby="desktop-title">
+  <div><p class="eyebrow">REMOTECAM DESKTOP · <?= e($config['windows_version']) ?> TEST</p><h2 id="desktop-title"><?= e(t('desktopTitle')) ?></h2><p><?= e(t('desktopBody')) ?></p>
+   <a class="button" href="<?= e($config['windows_download']) ?>"><?= platformIcon('windows') ?><?= e(t('downloadExe')) ?></a>
+  </div>
+  <ol class="desktop-steps">
+   <?php for ($n=1;$n<=3;$n++): ?><li><h3><?= e(t('desktopStep'.$n)) ?></h3><p><?= e(t('desktopStep'.$n.'body')) ?></p></li><?php endfor; ?>
+  </ol>
+  <p class="desktop-note"><?= e(t('desktopAudio')) ?></p>
+ </section>
  <section class="section formats wrap">
   <div class="section-heading compact"><h2><?= e(t('formatsTitle')) ?></h2><p><?= e(t('formatsIntro')) ?></p></div>
   <div class="table-scroll"><table><thead><tr><th><?= e(t('format')) ?></th><th><?= e(t('receiver')) ?></th><th><?= e(t('address')) ?></th></tr></thead><tbody>
@@ -73,11 +86,21 @@ $downloadLabel = $apkAvailable ? t('download') : t('source');
  <section class="section wrap versions" id="versions"><div class="section-heading"><p class="eyebrow"><?= e(t('versionsEyebrow')) ?></p><h2><?= e(t('versionsTitle')) ?></h2></div><div>
   <?php foreach ($versions as $i=>$version): ?><article class="version"><div><strong><?= e($version['version']) ?></strong><time datetime="<?= e($version['date']) ?>"><?= e($version['date']) ?></time><?php if ($i===0): ?><span class="tag"><?= e(t('latest')) ?></span><?php endif; ?></div><div><h3><?= e($version['title'][$language]) ?></h3><p><?= e($version['description'][$language]) ?></p></div></article><?php endforeach; ?>
  </div></section>
- <section class="download wrap" id="download"><div><p class="eyebrow">REMOTECAM <?= e($current['version']) ?></p><h2><?= t('downloadTitle') ?></h2><p><?= e(t('downloadBody')) ?></p></div><div class="download-actions">
-  <a class="button accent" href="<?= e($downloadUrl) ?>"<?= $apkAvailable ? ' download' : '' ?>><?= e($downloadLabel) ?> ↓</a>
-  <?php if ($apkAvailable): ?><a class="text-link" href="<?= e($current['apk']) ?>.sha256" download><?= e(t('checksum')) ?> ↗</a><?php endif; ?>
-  <?php if ($config['play_store_url']): ?><a class="button" href="<?= e($config['play_store_url']) ?>"><?= e(t('play')) ?></a><?php else: ?><p class="muted"><?= e(t('playPending')) ?></p><?php endif; ?>
- </div><p class="migration"><?= e(t('migration')) ?></p></section>
+ <section class="download wrap" id="download">
+  <div class="download-heading"><p class="eyebrow"><?= e(t('downloadsEyebrow')) ?></p><h2><?= t('downloadTitle') ?></h2><p><?= e(t('downloadsBody')) ?></p></div>
+  <div class="download-platforms">
+   <article class="download-card"><div class="platform-heading"><?= platformIcon('android') ?><h3>Android</h3></div><p class="package-version">APK · <?= e($current['version']) ?> · Android 9+</p><p><?= e(t('downloadBody')) ?></p>
+    <div class="download-actions"><a class="button accent" href="<?= e($downloadUrl) ?>"<?= $apkAvailable ? ' download' : '' ?>><?= platformIcon('android') ?><?= e($downloadLabel) ?></a>
+     <?php if ($apkAvailable): ?><a class="text-link" href="<?= e($current['apk']) ?>.sha256" download><?= e(t('checksum')) ?> ↗</a><?php endif; ?>
+     <?php if ($config['play_store_url']): ?><a class="button" href="<?= e($config['play_store_url']) ?>"><?= platformIcon('android') ?><?= e(t('play')) ?></a><?php else: ?><p class="muted"><?= e(t('playPending')) ?></p><?php endif; ?>
+    </div>
+   </article>
+   <article class="download-card"><div class="platform-heading"><?= platformIcon('windows') ?><h3>Windows</h3></div><p class="package-version">EXE · <?= e($config['windows_version']) ?> TEST · Windows 11 x64</p><p><?= e(t('windowsDownloadBody')) ?></p>
+    <div class="download-actions"><a class="button" href="<?= e($config['windows_download']) ?>"><?= platformIcon('windows') ?><?= e(t('downloadExe')) ?></a><a class="text-link" href="<?= e($config['windows_download']) ?>.sha256"><?= e(t('checksum')) ?> ↗</a><a class="text-link" href="<?= e($config['windows_release']) ?>"><?= e(t('releaseNotes')) ?> ↗</a></div>
+   </article>
+  </div>
+  <p class="migration"><?= e(t('migration')) ?></p>
+ </section>
  <aside class="network wrap"><h3><?= e(t('networkTitle')) ?></h3><p><?= e(t('networkBody')) ?></p></aside>
  <section class="thanks wrap"><h3><?= e(t('thanks')) ?></h3><p><?= e(t('thanksBody')) ?></p><a class="text-link" href="https://github.com/Ruddle/RemoteCam"><?= e(t('original')) ?> ↗</a></section>
 </main>
