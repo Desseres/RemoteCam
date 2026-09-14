@@ -1,5 +1,21 @@
 # Lokalna poprawka go2rtc 1.9.14: retransmisja WebRTC
 
+## Odbiornik Windows 0.1.3
+
+[go2rtc-1.9.14-video-repair.patch](go2rtc-1.9.14-video-repair.patch) to zbiorcza
+poprawka dla tej samej rewizji upstream. Zawiera poniższą naprawę wyjściowego NACK
+oraz porządkowanie pakietów H.264/H.265, oczekiwanie na retransmisję do 150 ms
+i odzyskiwanie klatki kluczowej po stracie danych. Wykrywa również utratę fragmentów
+w lokalnej kolejce RTSP i zamyka taką sesję, aby odbiornik ją odnowił.
+Nie należy nakładać obu patchy
+jednocześnie; skrypt `windows/prepare-dependencies.ps1` obsługuje migrację.
+
+Nowa ścieżka wejściowa jest aktywna tylko z `REMOTECAM_RTP_REPAIR=1`, ustawianym
+przez RemoteCam Desktop dla jego procesu go2rtc. Nie zmienia osobnej instalacji OBS.
+Opis testów i ograniczeń: [Windows validation](../windows/VALIDATION.md).
+
+## Dotychczasowa poprawka wyjściowego NACK
+
 [go2rtc-1.9.14-nack.patch](go2rtc-1.9.14-nack.patch) dotyczy **go2rtc**, a nie APK
 RemoteCam. To lokalna poprawka do oficjalnego tagu `v1.9.14`, commit
 `b5948cfb25404cc5cb37b166ecaa2dca20b11d4b`. Nie jest oficjalnym wydaniem autora go2rtc.

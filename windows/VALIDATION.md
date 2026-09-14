@@ -1,5 +1,91 @@
 # Windows prototype validation — 14 September 2026
 
+## 0.1.3 high-resolution H.265 GPU decoding
+
+The user's live codec-switch test exposed a second failure after packet repair:
+H.265 input reached go2rtc without incoming loss, but the RTSP sender reported
+thousands of dropped packets. A one-thread CPU decoder could not sustain this
+4096×2304, 40 Mb/s target input. Two 35 s same-source probes with/without
+`low_delay` both delivered about 23 fps and had reference-frame errors. A D3D11VA
+probe sustained 30 fps. Secondary probes initially joined between keyframes;
+their startup parameter-set messages are distinct from the continuing CPU errors.
+
+The desktop now uses explicit D3D11VA hardware output, downloads NV12 frames and
+scales them to 1920×1080. GPU setup failure switches subsequent attempts to four
+CPU decoder threads. An RTSP sequence-gap guard after the local sender queue
+closes an overrun session so the receiver reconnects rather than continue to
+decode missing fragments. This guard is enabled only for the desktop child.
+
+| Physical phone / H.265 / real WinForms | Receive | Preview | Process CPU time | Decoder errors |
+| --- | --- | --- | --- | --- |
+| 45.00 s, D3D11VA | 30.33 fps | 30.02 fps | 2.73 s | 0 |
+
+The run produced 1370 frames. It included packet reordering and a later burst
+with three unrecovered packets; dependent frames were suppressed and playback
+resumed without decoder corruption. This establishes recovery in that test,
+not loss-free Wi-Fi or a guarantee against pauses. Physical display latency and
+subjective artifact quality still need user assessment.
+
+A forced software-path 15 s smoke test produced 356 frames with zero decoder
+errors (includes startup and a network-loss recovery). It is not a 30 fps CPU
+performance claim. Tests also verify detecting a GPU setup failure from stderr.
+The process is fully drained on exit before deciding whether to fall back.
+The RTSP sequence guard test covers wraparound and stopping on a missing packet.
+WebRTC, RTSP, and watchdog test suites pass after the changes.
+
+A separate camera smoke run returned changing Media Foundation sample checksums
+at 1920×1080 NV12 (3,110,400 bytes each), confirming the GPU path reaches the
+Windows virtual camera. The native DLL hash is unchanged from 0.1.1.
+
+The user's H.264/H.265 switching in 0.1.2 caused automatic receiver renewals while
+the same camera-host process remained alive. The same monitor is used in 0.1.3.
+Five-second bounded diagnostic snapshots now make current failures inspectable
+without disconnecting or recording camera images.
+
+## 0.1.2 packet repair and automatic recovery
+
+The existing receiver reproduced H.264 decoder errors (`error while decoding MB`,
+`corrupt decoded frame`, missing PPS) and RTP sequence discontinuities. Its WHEP
+track reader forwarded arrival-order RTP directly into RTSP without reordering or
+waiting for NACK repairs. This was distinct from the preview's earlier 4 fps cap.
+
+The desktop-only repair path now assembles complete access units, waits up to
+150 ms for a missing packet, discards duplicates/late repairs, and requests a new
+IDR after an unrecoverable gap. Dependent frames are withheld until that IDR.
+Packet history for NACK is 8192 (previous default 512), with a 20 ms request
+interval and at most five requests per packet. RTSP sequence numbers are rebuilt
+after intentional drops. FFmpeg retains probed keyframes and requests video only.
+The original SSRC/sequence space is retained on the WebRTC feedback path.
+
+Physical phone, H.264, high-resolution input (phone settings observed at
+4096×2304, 40 Mb/s target, 30 fps), desktop output 1920×1080:
+
+| Real WinForms test | Receive | Preview | Process CPU time | Decoder errors |
+| --- | --- | --- | --- | --- |
+| 40.00 s | 30.32 fps | 29.50 fps | 2.25 s | 0 |
+
+The receive average includes a small startup burst. Final diagnostic count was
+1221 decoded frames. A separate 40 s FFmpeg diagnostic run encountered a burst
+with six unrecovered RTP packets; the repair layer suppressed dependent frames
+and resumed without H.264 corruption messages. Timestamp rounding warnings in
+the null/rawvideo muxer were present; these are not decoder corruption reports.
+
+Go tests cover reordering across sequence wrap, duplicates, missing fragments,
+dependent-frame suppression, new-IDR recovery, padding, missing markers, H.265
+fragment/aggregation key detection, and bounded storage. Existing outgoing NACK
+integration tests still pass. The cumulative patch's reverse check and the
+dependency preparation script both pass on the updated checkout.
+
+Process-level C# tests use a loopback HTTP fixture and disposable decoder children:
+no complete frames causes a restart; producer ID replacement causes a restart;
+an empty transient producer list does not; cancellation terminates the monitor.
+The monitor uses one task per pipeline, not one timer per raw pipe read.
+The address/preview self-test passes. Native camera binaries are unchanged.
+
+Limits: the 40 s phone run does not establish long-term Wi-Fi reliability or
+absolute end-to-end latency. Subsequent live H.265 testing exposed CPU overload,
+addressed above in 0.1.3. No phone settings were changed automatically by these tests.
+
 ## 0.1.1 preview and performance fix
 
 The user reported stuttering specifically in the desktop preview. Code inspection

@@ -15,6 +15,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Web.Script.Serialization;
 
 namespace RemoteCamDesktop
 {
@@ -219,10 +220,35 @@ namespace RemoteCamDesktop
         public long ReadCalls { get { return Interlocked.Read(ref readCalls); } }
         public string Codec = "—";
         string decoderError = "";
+        bool useHardware = Environment.GetEnvironmentVariable("REMOTECAM_SOFTWARE_DECODER") != "1";
+        volatile bool hardwareFailed;
+        readonly Queue<string> diagnostics = new Queue<string>();
+        long lastFrameTicks;
+        public long DecodeErrors;
+        void Trace(string line)
+        {
+            lock (diagnostics) {
+                if (diagnostics.Count == 256) diagnostics.Dequeue();
+                diagnostics.Enqueue(DateTime.UtcNow.ToString("O") + " " + line);
+            }
+        }
+        void SaveDiagnostics()
+        {
+            try {
+                string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RemoteCam Desktop");
+                Directory.CreateDirectory(path);
+                lock (diagnostics) {
+                    var lines = new List<string>();
+                    lines.Add(DateTime.UtcNow.ToString("O") + " snapshot frames=" + Frames + " decodeErrors=" + Interlocked.Read(ref DecodeErrors));
+                    lines.AddRange(diagnostics);
+                    File.WriteAllLines(Path.Combine(path, "receiver.log"), lines);
+                }
+            } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
         public Action<string> Status;
         public long Frames { get { return Interlocked.Read(ref frames); } }
         public byte[] Latest { get { return broker == null ? null : broker.Latest; } }
-        void Report(string value) { var handler = Status; if (handler != null) handler(value); }
+        void Report(string value) { Trace(value); var handler = Status; if (handler != null) handler(value); }
 
         public static Uri PhoneUri(string value)
         {
@@ -249,6 +275,7 @@ namespace RemoteCamDesktop
             info.UseShellExecute = false; info.CreateNoWindow = true;
             info.RedirectStandardOutput = true; info.RedirectStandardError = true;
             info.RedirectStandardInput = input; info.WorkingDirectory = folder;
+            if (exe == "go2rtc.exe") info.EnvironmentVariables["REMOTECAM_RTP_REPAIR"] = "1";
             var process = new Process(); process.StartInfo = info;
             process.Start();
             try { job.Add(process); }
@@ -261,6 +288,12 @@ namespace RemoteCamDesktop
             p.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e)
             {
                 if (e.Data == null) return;
+                if (!e.Data.StartsWith("frame=")) Trace(e.Data);
+                if (codec && (e.Data.Contains("corrupt") || e.Data.Contains("error while decoding") || e.Data.Contains("Could not find ref")))
+                    Interlocked.Increment(ref DecodeErrors);
+                if (codec && (e.Data.Contains("Device setup failed") || e.Data.Contains("No device available") ||
+                    e.Data.Contains("Failed setup for format d3d11") || e.Data.Contains("Failed to create D3D11") ||
+                    e.Data.Contains("Invalid output format") || e.Data.Contains("Error reinitializing filters"))) hardwareFailed = true;
                 if (codec && (e.Data.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 || e.Data.Contains("Option "))) decoderError = e.Data;
                 if (codec && e.Data.Contains("Video: "))
                 {
@@ -310,6 +343,8 @@ namespace RemoteCamDesktop
             while (!token.IsCancellationRequested)
             {
                 Process relay = null, decoder = null;
+                CancellationTokenSource attemptStop = null;
+                Task monitor = null;
                 try
                 {
                     int api = FreePort(), rtsp = FreePort();
@@ -335,11 +370,18 @@ namespace RemoteCamDesktop
                     }
                     Report("Łączenie z telefonem… Włącz Stream i tryb WebRTC.");
                     decoderError = "";
-                    // One decoder/output thread prevents frame-thread queues from
-                    // adding latency. Never synthesize frames to catch up with a clock.
-                    string args = "-hide_banner -loglevel info -nostdin -rtsp_transport tcp -timeout 5000000 -fflags nobuffer -flags low_delay -threads 1 -probesize 1000000 -analyzeduration 1000000 -i rtsp://127.0.0.1:" + rtsp + "/phone -an -sn -dn -filter_threads 1 -vf \"scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1\" -pix_fmt nv12 -threads:v 1 -fps_mode passthrough -f rawvideo pipe:1";
+                    hardwareFailed = false;
+                    // Preserve the probed keyframe/parameter sets; nobuffer discarded
+                    // them. RTP is repaired before RTSP, which carries video only.
+                    string acceleration = useHardware ? "-hwaccel d3d11va -hwaccel_output_format d3d11 -threads 1 " : "-threads 4 ";
+                    string download = useHardware ? "hwdownload,format=nv12," : "";
+                    string args = "-hide_banner -loglevel info -nostdin -rtsp_transport tcp -allowed_media_types video -timeout 5000000 " + acceleration + "-probesize 1000000 -analyzeduration 1000000 -i rtsp://127.0.0.1:" + rtsp + "/phone -an -sn -dn -filter_threads 1 -vf \"" + download + "scale=1920:1080:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=1920:1080:(ow-iw)/2:(oh-ih)/2,setsar=1\" -pix_fmt nv12 -threads:v 1 -fps_mode passthrough -f rawvideo pipe:1";
+                    Trace("decoder=" + (useHardware ? "D3D11VA GPU" : "CPU 4 threads"));
                     decoder = Launch("ffmpeg.exe", args, false);
                     DrainErrors(decoder, true);
+                    Interlocked.Exchange(ref lastFrameTicks, 0);
+                    attemptStop = CancellationTokenSource.CreateLinkedTokenSource(token);
+                    monitor = MonitorPipeline(api, decoder, attemptStop.Token);
                     var output = decoder.StandardOutput.BaseStream;
                     bool firstFrame = true;
                     while (!token.IsCancellationRequested)
@@ -351,21 +393,77 @@ namespace RemoteCamDesktop
                             // This loop already runs on a worker. Anonymous pipes use
                             // small reads; scheduling a Task and an uncancelled timer
                             // for every chunk caused thousands of pending timers.
-                            // FFmpeg's socket timeout and Stop() killing its process
-                            // unblock this read on network loss or cancellation.
+                            // The per-pipeline monitor and Stop() kill the decoder to
+                            // unblock this read even if packets arrive without frames.
                             int count = output.Read(frame, offset, frame.Length - offset);
                             Interlocked.Increment(ref readCalls);
                             if (count == 0) throw new IOException("Połączenie wideo zostało przerwane. " + decoderError);
                             offset += count;
                         }
                         broker.Publish(frame);
+                        Interlocked.Exchange(ref lastFrameTicks, Stopwatch.GetTimestamp());
                         Interlocked.Increment(ref frames);
-                        if (firstFrame) { Report("Połączono · " + Codec + " · wyjście 1920 × 1080 / 30 fps"); firstFrame = false; }
+                        if (firstFrame) { Report("Połączono · " + Codec + " · " + (useHardware ? "GPU" : "CPU") + " · wyjście 1920 × 1080 / 30 fps"); firstFrame = false; }
                     }
                 }
-                catch (Exception e) { if (!token.IsCancellationRequested) Report(e.Message + " Ponawiam za 2 s…"); }
-                finally { broker.Clear(); EndProcess(decoder); EndProcess(relay); }
+                catch (Exception e) {
+                    // EOF can precede asynchronous stderr delivery. Drain an exited
+                    // process before deciding whether GPU initialization failed.
+                    if (decoder != null) { try { if (decoder.HasExited) decoder.WaitForExit(); } catch (InvalidOperationException) { } }
+                    if (useHardware && hardwareFailed) { useHardware = false; Trace("GPU unavailable — switching to software decoder."); }
+                    if (!token.IsCancellationRequested) Report(e.Message + " Ponawiam za 2 s…");
+                }
+                finally {
+                    if (attemptStop != null) {
+                        attemptStop.Cancel();
+                        if (monitor != null) { try { await monitor; } catch (OperationCanceledException) { } }
+                        attemptStop.Dispose();
+                    }
+                    broker.Clear(); EndProcess(decoder); EndProcess(relay); SaveDiagnostics();
+                }
                 if (!token.IsCancellationRequested) { try { await Task.Delay(2000, token); } catch (OperationCanceledException) { } }
+            }
+        }
+        public sealed class SourceSnapshot { public int id { get; set; } }
+        public sealed class StreamSnapshot { public SourceSnapshot[] producers { get; set; } }
+        async Task MonitorPipeline(int api, Process decoder, CancellationToken token)
+        {
+            long started = Stopwatch.GetTimestamp();
+            int producer = 0;
+            long lastDiagnostic = started;
+            using (var http = new HttpClient()) {
+                http.Timeout = TimeSpan.FromSeconds(1);
+                var json = new JavaScriptSerializer();
+                while (!token.IsCancellationRequested) {
+                    await Task.Delay(500, token);
+                    long last = Interlocked.Read(ref lastFrameTicks);
+                    double seconds = (Stopwatch.GetTimestamp() - (last == 0 ? started : last)) / (double)Stopwatch.Frequency;
+                    string reason = seconds > (last == 0 ? 12 : 4) ? "Brak nowych klatek — odnawiam odbiór." : null;
+                    try {
+                        using (var response = await http.GetAsync("http://127.0.0.1:" + api + "/api/streams", token)) {
+                            if (response.IsSuccessStatusCode) {
+                                var streams = json.Deserialize<Dictionary<string, StreamSnapshot>>(await response.Content.ReadAsStringAsync());
+                                StreamSnapshot stream;
+                                if (streams != null && streams.TryGetValue("phone", out stream) && stream.producers != null && stream.producers.Length > 0) {
+                                    int current = stream.producers[0].id;
+                                    if (producer != 0 && current != producer) reason = "Telefon zmienił strumień — odnawiam odbiór.";
+                                    producer = current;
+                                }
+                            }
+                        }
+                    } catch (HttpRequestException) { }
+                    catch (TaskCanceledException) { token.ThrowIfCancellationRequested(); }
+                    catch (ArgumentException) { }
+                    catch (InvalidOperationException) { }
+                    if ((Stopwatch.GetTimestamp() - lastDiagnostic) / (double)Stopwatch.Frequency >= 5) {
+                        SaveDiagnostics(); lastDiagnostic = Stopwatch.GetTimestamp();
+                    }
+                    if (reason != null) {
+                        Report(reason);
+                        try { if (!decoder.HasExited) decoder.Kill(); } catch (InvalidOperationException) { }
+                        return;
+                    }
+                }
             }
         }
         void EndProcess(Process p)
@@ -399,6 +497,8 @@ namespace RemoteCamDesktop
             stop.Dispose(); stop = null;
             if (job != null) job.Dispose(); job = null;
             Report("Rozłączono. Kamera została wyłączona.");
+            Trace("frames=" + Frames + " decodeErrors=" + Interlocked.Read(ref DecodeErrors));
+            SaveDiagnostics();
         }
         public void Dispose() { Stop().GetAwaiter().GetResult(); }
     }
@@ -494,7 +594,7 @@ namespace RemoteCamDesktop
         long previousMetricTime;
         public MainWindow()
         {
-            Text = "RemoteCam Desktop · wersja testowa 0.1.1";
+            Text = "RemoteCam Desktop · wersja testowa 0.1.3";
             ClientSize = new Size(900, 700); MinimumSize = new Size(740, 620);
             StartPosition = FormStartPosition.CenterScreen;
             // Website accent (#ffe15a), paired with the requested warm dark brown.

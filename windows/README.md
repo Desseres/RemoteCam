@@ -20,12 +20,27 @@ that frame with letterboxing. A disconnected feed turns black after 1.5 seconds;
 the receiver retries automatically. **Rozłącz** removes the session camera.
 The phone's settings are not changed by the desktop application.
 
-Version **0.1.1-test** uses a warm dark-brown interface and the website's yellow
+Version **0.1.3-test** uses D3D11VA hardware decoding on Windows, with a four-thread
+software fallback if hardware initialization fails. The connection status shows
+**GPU** or **CPU**. The previous single-thread CPU decoder could not sustain the
+phone's high-bitrate 4K H.265 stream and overflowed the local packet queue.
+
+The receiver repairs reordered/missing video packets before decoding.
+It waits up to 150 ms for retransmission when a gap occurs; complete frames are
+forwarded immediately. If repair fails, it drops the damaged reference chain
+and requests a fresh keyframe. A brief pause can still occur on a lossy network.
+Changing codec/restarting the phone stream automatically renews the receiver;
+a four-second no-frame watchdog also catches decoders that remain connected
+but stop producing images. Initial connection has a 12-second grace period.
+The Windows camera stays registered throughout this recovery. A local RTSP queue
+overflow also renews the decoder session instead of continuing with missing fragments.
+
+The interface uses warm dark brown and the website's yellow
 accent (`#ffe15a`). The preview follows incoming frames (approximately 30 fps),
 converts at most one frame at a time on a worker, and never builds a display queue.
 The status bar shows separate **receive** and **preview** frame rates.
 The original 0.1.0 preview was limited to four updates per second.
-No camera-component reinstall is required when updating from 0.1.0 to 0.1.1.
+No camera-component reinstall is required when updating from 0.1.0–0.1.2 to 0.1.3.
 
 Windows camera privacy settings must permit desktop applications. The test
 binaries are not signed; there is no public Windows release yet. Compatibility
@@ -48,8 +63,12 @@ retry after restarting Windows. The desktop folder can then be removed.
 - No recordings, camera frames or audio are written to disk. The last phone address
   is saved in `%LOCALAPPDATA%/RemoteCam/desktop-address.txt`. Temporary relay
   configuration is removed on normal shutdown.
-- H.264 and H.265 are decoded by FFmpeg on the PC. This prototype uses software
-  decoding; GPU acceleration and latency tuning are future work.
+- Bounded text diagnostics (last 256 lines, including packet repair counters and
+  decoder errors) are saved every five seconds and on retry/disconnect to
+  `%LOCALAPPDATA%/RemoteCam Desktop/receiver.log`. They contain no camera images.
+- H.264 and H.265 are decoded by FFmpeg on the PC using D3D11VA when available.
+  Hardware frames are downloaded as NV12 and scaled to the camera's fixed output.
+  Setting `REMOTECAM_SOFTWARE_DECODER=1` before launch forces the CPU path for diagnostics.
 - The camera media source is adapted from Microsoft's MIT-licensed Windows-Camera
   sample; attribution is in `licenses/`. Native binaries use a static MSVC runtime.
   The UI uses the .NET Framework included in Windows 11.
@@ -58,7 +77,13 @@ retry after restarting Windows. The desktop folder can then be removed.
 
 Requires Visual Studio 2022 C++ tools, Windows SDK 10.0.22000.0, and Windows 11 x64.
 Run `prepare-dependencies.ps1`, then `build.ps1` from PowerShell.
-Output: `dist/windows/RemoteCam-Desktop-0.1.1-test/`.
+Output: `dist/windows/RemoteCam-Desktop-0.1.3-test/`.
+
+The Windows dependency build uses the cumulative
+`patches/go2rtc-1.9.14-video-repair.patch` against the pinned upstream commit.
+It includes the previous outgoing NACK fix. Incoming video repair and tuned
+NACK feedback are enabled only in the desktop child via `REMOTECAM_RTP_REPAIR=1`.
+The separately installed go2rtc used with OBS is not replaced.
 
 - `RemoteCam.exe --self-test`: address validation and NV12 preview checks.
 - `RemoteCam.exe --preview-test PHONE_IP:8080 20`: exercise the actual WinForms
@@ -71,5 +96,8 @@ Output: `dist/windows/RemoteCam-Desktop-0.1.1-test/`.
 - `RemoteCamHost.exe --list`: enumerate Windows cameras.
 - `RemoteCamHost.exe --probe`: read 60 frames from the RemoteCam camera through
   Media Foundation and report sizes, timestamps and content checksums, not pixels.
+- `tests/ReceiverWatchdogTests.cs`: compile as a .NET Framework console executable
+  and pass the absolute `RemoteCam.exe` path. Uses a local HTTP fixture and its
+  own idle child processes to verify frame stall/source replacement/cancellation.
 
 These commands do not replace a live test in OBS or a conferencing application.

@@ -28,9 +28,16 @@ if (!(Test-Path "$goSource/.git")) {
 }
 $commit = git -C $goSource rev-parse HEAD
 if ($commit -ne 'b5948cfb25404cc5cb37b166ecaa2dca20b11d4b') { throw 'Unexpected go2rtc source revision.' }
-$patchPath = Join-Path $repoRoot 'patches/go2rtc-1.9.14-nack.patch'
+$patchPath = Join-Path $repoRoot 'patches/go2rtc-1.9.14-video-repair.patch'
 git -C $goSource apply --reverse --check $patchPath 2>$null
 if ($LASTEXITCODE) {
+    # Migrate the previous Windows dependency checkout containing NACK only.
+    $oldPatch = Join-Path $repoRoot 'patches/go2rtc-1.9.14-nack.patch'
+    git -C $goSource apply --reverse --check $oldPatch 2>$null
+    if (!$LASTEXITCODE) {
+        git -C $goSource apply --reverse $oldPatch
+        if ($LASTEXITCODE) { throw 'Old go2rtc patch migration failed.' }
+    }
     git -C $goSource apply --check $patchPath
     if ($LASTEXITCODE) { throw 'go2rtc patch check failed.' }
     git -C $goSource apply $patchPath
@@ -38,7 +45,7 @@ if ($LASTEXITCODE) {
 }
 Push-Location $goSource
 try {
-    & $GoExe test ./pkg/webrtc -count=1
+    & $GoExe test ./pkg/webrtc ./pkg/rtsp -count=1
     if ($LASTEXITCODE) { throw 'go2rtc tests failed.' }
     & $GoExe build -trimpath -ldflags '-s -w' -o "$repoRoot/build/go2rtc-remotecam.exe" .
     if ($LASTEXITCODE) { throw 'go2rtc build failed.' }
