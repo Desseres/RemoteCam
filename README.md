@@ -20,6 +20,17 @@ In a world full of ads, subscriptions and paywalls, we want this project to
 remain freely available to everyone. Download the source, build it, use it and
 make it your own. Contributions and improvements are welcome.
 
+## Windows virtual camera (experimental)
+
+The development checkout also includes [RemoteCam Desktop for Windows 11](windows/README.md).
+It receives the phone stream and exposes a **RemoteCam** camera to Windows apps,
+including OBS's **Video Capture Device** source. The prototype outputs 1080p30,
+decodes H.264/H.265 on the PC, and reconnects automatically. It currently carries
+video only; choose a separate microphone in the receiving application.
+
+This is a local test build, not part of the public Android 0.3.2 release. See the
+[build/install instructions](windows/README.md) and [validation results](windows/VALIDATION.md).
+
 ## Install the test version
 
 **0.3.2 is a public prerelease for testing**, distributed as a signed release APK
